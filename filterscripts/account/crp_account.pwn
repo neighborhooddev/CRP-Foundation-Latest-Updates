@@ -2,12 +2,17 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Account System v0.2
+// Account System v0.3
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Mendeteksi username player
 // - Mengecek account melalui Storage System
+// - Menentukan status account
 // - Mengarahkan player ke Register / Login
+// - Menjadi router awal Account System
 //
 // Storage:
 // filterscripts/storage/crp_storage.pwn
@@ -17,16 +22,36 @@
 //
 // Login:
 // filterscripts/account/crp_login.pwn
+//
+// Catatan:
+// - Account System TIDAK menyimpan password.
+// - Account System TIDAK menangani Character.
+// - Account System hanya menangani routing awal.
+// ============================================================
+
+
+// ============================================================
+// COLOR
 // ============================================================
 
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
+
+
+// ============================================================
+// ACCOUNT STATUS
+// ============================================================
 
 #define ACCOUNT_STATUS_UNREGISTERED   0
 #define ACCOUNT_STATUS_REGISTERED     1
+
+
+// ============================================================
+// PLAYER ACCOUNT STATE
+// ============================================================
 
 new gAccountStatus[MAX_PLAYERS];
 
@@ -53,11 +78,69 @@ forward CRP_StartLogin(playerid);
 
 
 // ============================================================
+// PLAYER VALIDATION
+// ============================================================
+
+stock CRP_IsValidAccountPlayer(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// RESET ACCOUNT STATE
+// ============================================================
+
+stock CRP_ResetAccountState(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
+    gAccountStatus[playerid] =
+        ACCOUNT_STATUS_UNREGISTERED;
+
+    return 1;
+}
+
+
+// ============================================================
+// GET ACCOUNT STATUS
+// ============================================================
+
+stock CRP_GetAccountStatus(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return ACCOUNT_STATUS_UNREGISTERED;
+    }
+
+    return gAccountStatus[playerid];
+}
+
+
+// ============================================================
 // CHECK ACCOUNT
 // ============================================================
 
 stock CRP_CheckAccount(playerid)
 {
+    if (!CRP_IsValidAccountPlayer(playerid))
+    {
+        return ACCOUNT_STATUS_UNREGISTERED;
+    }
+
     new exists;
 
     exists = CallRemoteFunction(
@@ -87,6 +170,11 @@ stock CRP_CheckAccount(playerid)
 
 stock CRP_OpenRegister(playerid)
 {
+    if (!CRP_IsValidAccountPlayer(playerid))
+    {
+        return 0;
+    }
+
     new name[MAX_PLAYER_NAME];
     new message[144];
 
@@ -131,6 +219,11 @@ stock CRP_OpenRegister(playerid)
 
 stock CRP_OpenLogin(playerid)
 {
+    if (!CRP_IsValidAccountPlayer(playerid))
+    {
+        return 0;
+    }
+
     new name[MAX_PLAYER_NAME];
     new message[144];
 
@@ -170,13 +263,43 @@ stock CRP_OpenLogin(playerid)
 
 
 // ============================================================
+// ACCOUNT ROUTER
+// ============================================================
+
+stock CRP_RouteAccount(playerid)
+{
+    if (!CRP_IsValidAccountPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if (
+        gAccountStatus[playerid]
+        == ACCOUNT_STATUS_UNREGISTERED
+    )
+    {
+        return CRP_OpenRegister(playerid);
+    }
+
+    if (
+        gAccountStatus[playerid]
+        == ACCOUNT_STATUS_REGISTERED
+    )
+    {
+        return CRP_OpenLogin(playerid);
+    }
+
+    return 0;
+}
+
+
+// ============================================================
 // PLAYER CONNECT
 // ============================================================
 
 public OnPlayerConnect(playerid)
 {
-    gAccountStatus[playerid] =
-        ACCOUNT_STATUS_UNREGISTERED;
+    CRP_ResetAccountState(playerid);
 
     new name[MAX_PLAYER_NAME];
     new message[144];
@@ -200,27 +323,19 @@ public OnPlayerConnect(playerid)
         message
     );
 
+
     // --------------------------------------------------------
-    // CHECK STORAGE
+    // CHECK ACCOUNT
     // --------------------------------------------------------
 
     CRP_CheckAccount(playerid);
 
+
     // --------------------------------------------------------
-    // ROUTER
+    // ROUTE ACCOUNT
     // --------------------------------------------------------
 
-    if (
-        gAccountStatus[playerid]
-        == ACCOUNT_STATUS_UNREGISTERED
-    )
-    {
-        CRP_OpenRegister(playerid);
-    }
-    else
-    {
-        CRP_OpenLogin(playerid);
-    }
+    CRP_RouteAccount(playerid);
 
     return 1;
 }
@@ -235,8 +350,7 @@ public OnPlayerDisconnect(
     reason
 )
 {
-    gAccountStatus[playerid] =
-        ACCOUNT_STATUS_UNREGISTERED;
+    CRP_ResetAccountState(playerid);
 
     return 1;
 }
@@ -249,8 +363,8 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Account System v0.2");
-    print(" Storage Account Router");
+    print(" CRP Account System v0.3");
+    print(" Account Detection & Router");
     print("---------------------------------------");
 
     return 1;
