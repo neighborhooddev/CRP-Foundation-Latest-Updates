@@ -121,20 +121,6 @@ new gStorageCharacterLastLogout[MAX_PLAYERS]
 
 
 // ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-stock Storage_StripNewline(string[])
-{
-    new len = strlen(string);
-    while (len > 0 && (string[len - 1] == '\r' || string[len - 1] == '\n'))
-    {
-        string[--len] = '\0';
-    }
-}
-
-
-// ============================================================
 // RESET STORAGE
 // ============================================================
 
@@ -332,8 +318,6 @@ stock CRP_StorageIPAlreadyRegistered(playerid)
 
     while (fread(file, line))
     {
-        Storage_StripNewline(line);
-
         if (
             !strcmp(
                 line,
@@ -454,8 +438,6 @@ stock CRP_PRID_GetNext()
 
     while (fread(file, line))
     {
-        Storage_StripNewline(line);
-
         if (
             !strcmp(
                 line,
@@ -1300,8 +1282,6 @@ stock CRP_StorageLoadAccount(playerid)
 
     while (fread(file, line))
     {
-        Storage_StripNewline(line);
-
         if (
             !strcmp(
                 line,
