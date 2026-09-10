@@ -2,12 +2,11 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Account System v0.3
+// Account System v0.2
 //
 // Fungsi:
 // - Mendeteksi username player
 // - Mengecek account melalui Storage System
-// - Mengecek batas pendaftaran IP (1 IP = 1 UCP)
 // - Mengarahkan player ke Register / Login
 //
 // Storage:
@@ -37,7 +36,6 @@ new gAccountStatus[MAX_PLAYERS];
 // ============================================================
 
 forward CRP_StorageAccountExistsRemote(playerid);
-forward CRP_StorageIPAlreadyRegisteredRemote(playerid);
 
 
 // ============================================================
@@ -84,20 +82,6 @@ stock CRP_CheckAccount(playerid)
 
 
 // ============================================================
-// CHECK IP REGISTERED
-// ============================================================
-
-stock CRP_IsIPAlreadyRegistered(playerid)
-{
-    return CallRemoteFunction(
-        "CRP_StorageIPAlreadyRegisteredRemote",
-        "d",
-        playerid
-    );
-}
-
-
-// ============================================================
 // OPEN REGISTER
 // ============================================================
 
@@ -111,22 +95,6 @@ stock CRP_OpenRegister(playerid)
         name,
         sizeof(name)
     );
-
-    // Cek batas IP sebelum mengizinkan proses register
-    if (CRP_IsIPAlreadyRegistered(playerid))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "[CRP ACCOUNT] Alamat IP kamu sudah terdaftar pada UCP lain!"
-        );
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            "Satu IP hanya diperbolehkan mendaftarkan 1 akun UCP."
-        );
-        return 0;
-    }
 
     format(
         message,
@@ -281,8 +249,8 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Account System v0.3");
-    print(" Storage Account Router & IP Check");
+    print(" CRP Account System v0.2");
+    print(" Storage Account Router");
     print("---------------------------------------");
 
     return 1;
