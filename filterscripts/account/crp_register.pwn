@@ -2,14 +2,18 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Register System v0.5
+// Register System v0.6
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Password 1/2
 // - Password 2/2
 // - Email 1/2
 // - Email 2/2
-// - Maksimal 3 kesalahan sinkronisasi
+// - Maksimal 3 kesalahan per tahap
+// - Validasi email dasar
 // - IP Registry
 // - 1 IP hanya boleh membuat 1 UCP
 // - Load 5 Character Slot setelah Register
@@ -31,11 +35,16 @@
 // CallRemoteFunction()
 // ============================================================
 
+
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
 
 
 // ============================================================
@@ -54,13 +63,13 @@
 // REGISTER LIMIT
 // ============================================================
 
-#define REGISTER_MAX_ERRORS 3
+#define REGISTER_MAX_ERRORS      3
 
-#define REGISTER_PASSWORD_MIN 6
-#define REGISTER_PASSWORD_MAX 64
+#define REGISTER_PASSWORD_MIN    6
+#define REGISTER_PASSWORD_MAX    64
 
-#define REGISTER_EMAIL_MIN 5
-#define REGISTER_EMAIL_MAX 64
+#define REGISTER_EMAIL_MIN       5
+#define REGISTER_EMAIL_MAX       64
 
 
 // ============================================================
@@ -79,7 +88,6 @@
 new gRegisterState[MAX_PLAYERS];
 
 new gRegisterPassword[MAX_PLAYERS][65];
-
 new gRegisterEmail[MAX_PLAYERS][65];
 
 new gRegisterErrorCount[MAX_PLAYERS];
@@ -119,6 +127,38 @@ forward CRP_ShowRegisterUIRemote(
 
 
 // ============================================================
+// LOGIN REMOTE FUNCTION
+// ============================================================
+
+forward CRP_StartLogin(
+    playerid
+);
+
+
+// ============================================================
+// PLAYER VALIDATION
+// ============================================================
+
+stock CRP_IsValidRegisterPlayer(playerid)
+{
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
 // RESET REGISTER
 // ============================================================
 
@@ -126,6 +166,14 @@ stock CRP_ResetRegister(
     playerid
 )
 {
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
     gRegisterState[playerid] =
         REGISTER_STATE_NONE;
 
@@ -143,6 +191,209 @@ stock CRP_ResetRegister(
 
 
 // ============================================================
+// GET REGISTER STATE
+// ============================================================
+
+stock CRP_GetRegisterState(
+    playerid
+)
+{
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return REGISTER_STATE_NONE;
+    }
+
+    return gRegisterState[playerid];
+}
+
+
+// ============================================================
+// GET REGISTER ERROR COUNT
+// ============================================================
+
+stock CRP_GetRegisterErrorCount(
+    playerid
+)
+{
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    return gRegisterErrorCount[playerid];
+}
+
+
+// ============================================================
+// CHECK REGISTER SUCCESS
+// ============================================================
+
+stock CRP_IsRegisterCompleted(
+    playerid
+)
+{
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if (
+        gRegisterState[playerid]
+        != REGISTER_STATE_SUCCESS
+    )
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// BASIC EMAIL VALIDATION
+// ============================================================
+
+stock CRP_IsValidRegisterEmail(
+    email[]
+)
+{
+    new length;
+    new atPosition;
+    new dotPosition;
+
+    length = strlen(email);
+
+    if (
+        length < REGISTER_EMAIL_MIN ||
+        length > REGISTER_EMAIL_MAX
+    )
+    {
+        return 0;
+    }
+
+    atPosition = -1;
+    dotPosition = -1;
+
+
+    // --------------------------------------------------------
+    // CARI @ DAN .
+    // --------------------------------------------------------
+
+    for (
+        new i = 0;
+        i < length;
+        i++
+    )
+    {
+        if (
+            email[i]
+            == '@'
+        )
+        {
+            if (atPosition != -1)
+            {
+                return 0;
+            }
+
+            atPosition = i;
+        }
+
+        if (
+            email[i]
+            == '.'
+        )
+        {
+            dotPosition = i;
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // HARUS MEMILIKI @
+    // --------------------------------------------------------
+
+    if (atPosition <= 0)
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // HARUS ADA KARAKTER SETELAH @
+    // --------------------------------------------------------
+
+    if (
+        atPosition >= length - 1
+    )
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // HARUS MEMILIKI .
+    // --------------------------------------------------------
+
+    if (dotPosition == -1)
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // . TIDAK BOLEH SEBELUM @
+    // --------------------------------------------------------
+
+    if (
+        dotPosition <= atPosition + 1
+    )
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // . TIDAK BOLEH DI AKHIR
+    // --------------------------------------------------------
+
+    if (
+        dotPosition >= length - 1
+    )
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // SPASI TIDAK DIPERBOLEHKAN
+    // --------------------------------------------------------
+
+    for (
+        new i = 0;
+        i < length;
+        i++
+    )
+    {
+        if (
+            email[i]
+            == ' '
+        )
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+
+// ============================================================
 // START REGISTER
 // ============================================================
 
@@ -154,17 +405,44 @@ public CRP_StartRegister(
     playerid
 )
 {
-    CRP_ResetRegister(
-        playerid
-    );
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // JIKA REGISTER SUDAH SELESAI
+    // --------------------------------------------------------
+
+    if (
+        gRegisterState[playerid]
+        == REGISTER_STATE_SUCCESS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP REGISTER] Account kamu sudah terdaftar."
+        );
+
+        return 1;
+    }
+
+
+    // --------------------------------------------------------
+    // RESET SESSION
+    // --------------------------------------------------------
+
+    CRP_ResetRegister(playerid);
 
     gRegisterState[playerid] =
         REGISTER_STATE_PASSWORD_1;
 
 
-    // ========================================================
-    // TAMPILKAN REGISTER TEXTDRAW
-    // ========================================================
+    // --------------------------------------------------------
+    // TAMPILKAN REGISTER UI
+    // --------------------------------------------------------
 
     CallRemoteFunction(
         "CRP_ShowRegisterUIRemote",
@@ -172,6 +450,10 @@ public CRP_StartRegister(
         playerid
     );
 
+
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
@@ -197,6 +479,11 @@ public CRP_RegisterPassword1(
     password[]
 )
 {
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
         gRegisterState[playerid]
         != REGISTER_STATE_PASSWORD_1
@@ -204,6 +491,7 @@ public CRP_RegisterPassword1(
     {
         return 0;
     }
+
 
     // --------------------------------------------------------
     // MINIMUM PASSWORD
@@ -223,6 +511,7 @@ public CRP_RegisterPassword1(
         return 0;
     }
 
+
     // --------------------------------------------------------
     // MAXIMUM PASSWORD
     // --------------------------------------------------------
@@ -241,6 +530,7 @@ public CRP_RegisterPassword1(
         return 0;
     }
 
+
     // --------------------------------------------------------
     // SIMPAN PASSWORD
     // --------------------------------------------------------
@@ -252,8 +542,20 @@ public CRP_RegisterPassword1(
         password
     );
 
+
+    // --------------------------------------------------------
+    // RESET ERROR UNTUK TAHAP BARU
+    // --------------------------------------------------------
+
+    gRegisterErrorCount[playerid] = 0;
+
     gRegisterState[playerid] =
         REGISTER_STATE_PASSWORD_2;
+
+
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
@@ -285,6 +587,11 @@ public CRP_RegisterPassword2(
     password[]
 )
 {
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
         gRegisterState[playerid]
         != REGISTER_STATE_PASSWORD_2
@@ -292,6 +599,7 @@ public CRP_RegisterPassword2(
     {
         return 0;
     }
+
 
     // --------------------------------------------------------
     // CEK PASSWORD
@@ -307,6 +615,7 @@ public CRP_RegisterPassword2(
     {
         gRegisterErrorCount[playerid]++;
 
+
         // ----------------------------------------------------
         // MAKSIMAL 3 KESALAHAN
         // ----------------------------------------------------
@@ -319,43 +628,66 @@ public CRP_RegisterPassword2(
             SendClientMessage(
                 playerid,
                 COLOR_RED,
-                "[CRP REGISTER] Kamu gagal melakukan konfirmasi sebanyak 3 kali."
+                "[CRP REGISTER] Kamu gagal melakukan konfirmasi password sebanyak 3 kali."
             );
 
             SendClientMessage(
                 playerid,
                 COLOR_RED,
-                "[CRP REGISTER] Silakan restart SA-MP untuk melakukan pendaftaran kembali."
+                "[CRP REGISTER] Silakan masuk kembali untuk melakukan pendaftaran."
             );
 
-            Kick(
-                playerid
-            );
+
+            CRP_ResetRegister(playerid);
+
+            Kick(playerid);
 
             return 0;
         }
 
-        // ----------------------------------------------------
-        // KEMBALI PASSWORD 1/2
-        // ----------------------------------------------------
 
-        gRegisterState[playerid] =
-            REGISTER_STATE_PASSWORD_1;
+        new remaining;
+        new message[144];
+
+        remaining =
+            REGISTER_MAX_ERRORS
+            - gRegisterErrorCount[playerid];
+
+
+        format(
+            message,
+            sizeof(message),
+            "[CRP REGISTER] Password tidak cocok. Kesalahan %d/%d. Kesempatan tersisa: %d.",
+            gRegisterErrorCount[playerid],
+            REGISTER_MAX_ERRORS,
+            remaining
+        );
 
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "[CRP REGISTER] Password kamu tidak sinkron dengan pengisian awal."
+            message
         );
 
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "[CRP REGISTER] Kami akan mengembalikan kamu ke pengisian password awal - 1/2."
+            "[CRP REGISTER] Silakan masukkan kembali password tahap awal."
         );
+
+
+        gRegisterState[playerid] =
+            REGISTER_STATE_PASSWORD_1;
+
+        gRegisterPassword[playerid][0] =
+            EOS;
+
+        gRegisterErrorCount[playerid] =
+            0;
 
         return 0;
     }
+
 
     // --------------------------------------------------------
     // PASSWORD BERHASIL
@@ -363,6 +695,10 @@ public CRP_RegisterPassword2(
 
     gRegisterState[playerid] =
         REGISTER_STATE_EMAIL_1;
+
+    gRegisterErrorCount[playerid] =
+        0;
+
 
     SendClientMessage(
         playerid,
@@ -394,6 +730,11 @@ public CRP_RegisterEmail1(
     email[]
 )
 {
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
         gRegisterState[playerid]
         != REGISTER_STATE_EMAIL_1
@@ -402,41 +743,28 @@ public CRP_RegisterEmail1(
         return 0;
     }
 
+
     // --------------------------------------------------------
-    // MINIMUM EMAIL
+    // VALIDASI EMAIL
     // --------------------------------------------------------
 
-    if (
-        strlen(email)
-        < REGISTER_EMAIL_MIN
-    )
+    if (!CRP_IsValidRegisterEmail(email))
     {
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "[CRP REGISTER] Alamat email tidak valid."
+            "[CRP REGISTER] Format alamat email tidak valid."
+        );
+
+        SendClientMessage(
+            playerid,
+            COLOR_GREY,
+            "Contoh: nama@email.com"
         );
 
         return 0;
     }
 
-    // --------------------------------------------------------
-    // MAXIMUM EMAIL
-    // --------------------------------------------------------
-
-    if (
-        strlen(email)
-        > REGISTER_EMAIL_MAX
-    )
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "[CRP REGISTER] Alamat email terlalu panjang."
-        );
-
-        return 0;
-    }
 
     // --------------------------------------------------------
     // SIMPAN EMAIL
@@ -449,8 +777,21 @@ public CRP_RegisterEmail1(
         email
     );
 
+
+    // --------------------------------------------------------
+    // RESET ERROR TAHAP EMAIL
+    // --------------------------------------------------------
+
+    gRegisterErrorCount[playerid] =
+        0;
+
     gRegisterState[playerid] =
         REGISTER_STATE_EMAIL_2;
+
+
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
@@ -482,6 +823,11 @@ public CRP_RegisterEmail2(
     email[]
 )
 {
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
         gRegisterState[playerid]
         != REGISTER_STATE_EMAIL_2
@@ -489,6 +835,23 @@ public CRP_RegisterEmail2(
     {
         return 0;
     }
+
+
+    // --------------------------------------------------------
+    // CEK FORMAT EMAIL ULANG
+    // --------------------------------------------------------
+
+    if (!CRP_IsValidRegisterEmail(email))
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP REGISTER] Format alamat email tidak valid."
+        );
+
+        return 0;
+    }
+
 
     // --------------------------------------------------------
     // CEK EMAIL
@@ -504,6 +867,7 @@ public CRP_RegisterEmail2(
     {
         gRegisterErrorCount[playerid]++;
 
+
         // ----------------------------------------------------
         // MAKSIMAL 3 KESALAHAN
         // ----------------------------------------------------
@@ -516,43 +880,66 @@ public CRP_RegisterEmail2(
             SendClientMessage(
                 playerid,
                 COLOR_RED,
-                "[CRP REGISTER] Kamu gagal melakukan konfirmasi sebanyak 3 kali."
+                "[CRP REGISTER] Kamu gagal melakukan konfirmasi email sebanyak 3 kali."
             );
 
             SendClientMessage(
                 playerid,
                 COLOR_RED,
-                "[CRP REGISTER] Silakan restart SA-MP untuk melakukan pendaftaran kembali."
+                "[CRP REGISTER] Silakan masuk kembali untuk melakukan pendaftaran."
             );
 
-            Kick(
-                playerid
-            );
+
+            CRP_ResetRegister(playerid);
+
+            Kick(playerid);
 
             return 0;
         }
 
-        // ----------------------------------------------------
-        // KEMBALI EMAIL 1/2
-        // ----------------------------------------------------
 
-        gRegisterState[playerid] =
-            REGISTER_STATE_EMAIL_1;
+        new remaining;
+        new message[144];
+
+        remaining =
+            REGISTER_MAX_ERRORS
+            - gRegisterErrorCount[playerid];
+
+
+        format(
+            message,
+            sizeof(message),
+            "[CRP REGISTER] Email tidak cocok. Kesalahan %d/%d. Kesempatan tersisa: %d.",
+            gRegisterErrorCount[playerid],
+            REGISTER_MAX_ERRORS,
+            remaining
+        );
 
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "[CRP REGISTER] Alamat email kamu tidak sinkron dengan pengisian awal."
+            message
         );
 
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "[CRP REGISTER] Kami akan mengembalikan kamu ke pengisian alamat email awal - 1/2."
+            "[CRP REGISTER] Silakan masukkan kembali alamat email awal."
         );
+
+
+        gRegisterState[playerid] =
+            REGISTER_STATE_EMAIL_1;
+
+        gRegisterEmail[playerid][0] =
+            EOS;
+
+        gRegisterErrorCount[playerid] =
+            0;
 
         return 0;
     }
+
 
     // --------------------------------------------------------
     // REGISTER BERHASIL
@@ -578,9 +965,35 @@ public CRP_RegisterSuccess(
     playerid
 )
 {
+    if (!CRP_IsValidRegisterPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // PROTEKSI DOUBLE REGISTER
+    // --------------------------------------------------------
+
+    if (
+        gRegisterState[playerid]
+        == REGISTER_STATE_SUCCESS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP REGISTER] Account kamu sudah berhasil dibuat."
+        );
+
+        return 1;
+    }
+
+
     new name[MAX_PLAYER_NAME];
     new message[144];
     new saved;
+
 
     GetPlayerName(
         playerid,
@@ -638,12 +1051,11 @@ public CRP_RegisterSuccess(
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "Silahkan login dengan User yang telah terdaftar."
+            "Silakan login dengan User yang telah terdaftar."
         );
 
-        CRP_ResetRegister(
-            playerid
-        );
+
+        CRP_ResetRegister(playerid);
 
         return 0;
     }
@@ -678,8 +1090,37 @@ public CRP_RegisterSuccess(
     // ACCOUNT BERHASIL
     // ========================================================
 
+    if (
+        saved
+        != STORAGE_CREATE_SUCCESS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP REGISTER] Storage memberikan status yang tidak dikenal."
+        );
+
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP REGISTER] Proses pendaftaran dihentikan."
+        );
+
+        return 0;
+    }
+
+
     gRegisterState[playerid] =
         REGISTER_STATE_SUCCESS;
+
+    gRegisterErrorCount[playerid] =
+        0;
+
+
+    // ========================================================
+    // SUCCESS MESSAGE
+    // ========================================================
 
     format(
         message,
@@ -728,6 +1169,7 @@ public CRP_RegisterSuccess(
         playerid
     );
 
+
     return 1;
 }
 
@@ -772,8 +1214,10 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Register System v0.5");
+    print(" CRP Register System v0.6");
     print(" Password + Email Registration");
+    print(" Password Confirmation Protection");
+    print(" Email Confirmation Protection");
     print(" IP Registry Lock Enabled");
     print(" 1 IP = 1 UCP Registration");
     print(" Register TextDraw Integration Loaded");
