@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Creation System v0.4
+// Character Creation System v0.5
 //
 // Fungsi:
 // - Logic pembuatan karakter
@@ -14,6 +14,8 @@
 // - Konfirmasi
 // - Menyimpan character ke Storage
 // - Mengambil PRID character
+// - Reset state creation
+// - Validasi input
 //
 // UI:
 // crp_character_create_textdraw.pwn
@@ -32,11 +34,15 @@
 // ============================================================
 
 
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
 
 
 // ============================================================
@@ -147,7 +153,9 @@ forward CRP_ShowRegisterSpawnSelectionRemote(
 // RESET
 // ============================================================
 
-stock CRP_ResetCharacterCreation(playerid)
+stock CRP_ResetCharacterCreation(
+    playerid
+)
 {
     gCreateState[playerid] = CREATE_STATE_NONE;
     gCreateSlot[playerid] = -1;
@@ -174,6 +182,13 @@ public CRP_GetCreateStateRemote(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return CREATE_STATE_NONE;
+    }
+
     return gCreateState[playerid];
 }
 
@@ -186,6 +201,13 @@ public CRP_GetCreateSlotRemote(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return -1;
+    }
+
     return gCreateSlot[playerid];
 }
 
@@ -202,6 +224,14 @@ public CRP_GetCreateNameRemote(
     size
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        name[0] = EOS;
+        return 0;
+    }
+
     format(
         name,
         size,
@@ -225,6 +255,14 @@ public CRP_GetCreateOriginRemote(
     size
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        origin[0] = EOS;
+        return 0;
+    }
+
     format(
         origin,
         size,
@@ -248,6 +286,14 @@ public CRP_GetCreateGenderRemote(
     size
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        gender[0] = EOS;
+        return 0;
+    }
+
     format(
         gender,
         size,
@@ -271,6 +317,14 @@ public CRP_GetCreateDOBRemote(
     size
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        dob[0] = EOS;
+        return 0;
+    }
+
     format(
         dob,
         size,
@@ -294,6 +348,14 @@ public CRP_GetCreateReligionRemote(
     size
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        religion[0] = EOS;
+        return 0;
+    }
+
     format(
         religion,
         size,
@@ -371,6 +433,13 @@ stock CRP_IsValidCharacterName(
 
 // ============================================================
 // CHARACTER NAME CHECK
+//
+// Catatan:
+// Saat ini pengecekan nama dilakukan terhadap character
+// yang tersimpan pada slot account/player yang sama.
+//
+// Global name uniqueness membutuhkan interface Storage
+// khusus dan tidak dibuat secara asumsi di file ini.
 // ============================================================
 
 stock CRP_IsCharacterNameUsed(
@@ -404,9 +473,24 @@ stock CRP_IsCharacterNameUsed(
         lastlogin[0] = EOS;
         level = 0;
 
+        // ----------------------------------------------------
+        // Storage signature:
+        //
+        // playerid       = d
+        // slot           = d
+        // charactername  = s
+        // namesize       = d
+        // level          = d
+        // lastlogin      = s
+        // lastloginsize  = d
+        //
+        // Correct format:
+        // "ddsddsd"
+        // ----------------------------------------------------
+
         CallRemoteFunction(
             "CRP_StorageGetCharacterSlotRemote",
-            "ddsdss",
+            "ddsddsd",
             playerid,
             slot,
             charactername,
@@ -467,6 +551,10 @@ public CRP_StartCharacterCreation(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // SLOT MUST BE EMPTY
+    // --------------------------------------------------------
+
     if (
         CallRemoteFunction(
             "CRP_StorageCharacterExistsRemote",
@@ -484,6 +572,7 @@ public CRP_StartCharacterCreation(
 
         return 0;
     }
+
 
     // --------------------------------------------------------
     // RESET CREATE STATE
@@ -555,6 +644,13 @@ public CRP_CreateName(
 )
 {
     if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
         gCreateState[playerid]
         != CREATE_STATE_NAME
     )
@@ -601,7 +697,7 @@ public CRP_CreateName(
 
     format(
         gCreateName[playerid],
-        25,
+        sizeof(gCreateName[]),
         "%s",
         input
     );
@@ -627,6 +723,13 @@ public CRP_CreateOrigin(
     input[]
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
     if (
         gCreateState[playerid]
         != CREATE_STATE_ORIGIN
@@ -664,7 +767,7 @@ public CRP_CreateOrigin(
 
     format(
         gCreateOrigin[playerid],
-        64,
+        sizeof(gCreateOrigin[]),
         "%s",
         input
     );
@@ -691,6 +794,13 @@ public CRP_CreateGender(
 )
 {
     if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
         gCreateState[playerid]
         != CREATE_STATE_GENDER
     )
@@ -704,7 +814,7 @@ public CRP_CreateGender(
     {
         format(
             gCreateGender[playerid],
-            16,
+            sizeof(gCreateGender[]),
             "Laki-Laki"
         );
     }
@@ -714,7 +824,7 @@ public CRP_CreateGender(
     {
         format(
             gCreateGender[playerid],
-            16,
+            sizeof(gCreateGender[]),
             "Perempuan"
         );
     }
@@ -732,6 +842,16 @@ public CRP_CreateGender(
 
 // ============================================================
 // DOB VALIDATION
+//
+// Format:
+// DD/MM/YYYY
+//
+// Sistem saat ini memvalidasi:
+// - Panjang
+// - Posisi "/"
+// - Semua karakter angka
+//
+// Validasi kalender detail dapat ditambahkan kemudian.
 // ============================================================
 
 stock CRP_IsValidDOB(
@@ -795,6 +915,13 @@ public CRP_CreateDOB(
 )
 {
     if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
         gCreateState[playerid]
         != CREATE_STATE_DOB
     )
@@ -825,7 +952,7 @@ public CRP_CreateDOB(
 
     format(
         gCreateDOB[playerid],
-        16,
+        sizeof(gCreateDOB[]),
         "%s",
         input
     );
@@ -852,6 +979,13 @@ public CRP_CreateReligion(
 )
 {
     if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
         gCreateState[playerid]
         != CREATE_STATE_RELIGION
     )
@@ -865,7 +999,7 @@ public CRP_CreateReligion(
         {
             format(
                 gCreateReligion[playerid],
-                24,
+                sizeof(gCreateReligion[]),
                 "Islam"
             );
         }
@@ -874,7 +1008,7 @@ public CRP_CreateReligion(
         {
             format(
                 gCreateReligion[playerid],
-                24,
+                sizeof(gCreateReligion[]),
                 "Kristen"
             );
         }
@@ -883,7 +1017,7 @@ public CRP_CreateReligion(
         {
             format(
                 gCreateReligion[playerid],
-                24,
+                sizeof(gCreateReligion[]),
                 "Hindu"
             );
         }
@@ -892,7 +1026,7 @@ public CRP_CreateReligion(
         {
             format(
                 gCreateReligion[playerid],
-                24,
+                sizeof(gCreateReligion[]),
                 "Buddha"
             );
         }
@@ -901,7 +1035,7 @@ public CRP_CreateReligion(
         {
             format(
                 gCreateReligion[playerid],
-                24,
+                sizeof(gCreateReligion[]),
                 "Lainnya"
             );
         }
@@ -938,6 +1072,13 @@ public CRP_SaveCreatedCharacter(
     new message[144];
 
     if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
         gCreateState[playerid]
         != CREATE_STATE_CONFIRM
     )
@@ -954,6 +1095,80 @@ public CRP_SaveCreatedCharacter(
             playerid,
             COLOR_RED,
             "[CRP CHARACTER] Slot karakter tidak valid."
+        );
+
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // FINAL DATA VALIDATION
+    // --------------------------------------------------------
+
+    if (
+        !CRP_IsValidCharacterName(
+            gCreateName[playerid]
+        )
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP CHARACTER] Data nama character tidak valid."
+        );
+
+        return 0;
+    }
+
+    if (
+        strlen(gCreateOrigin[playerid]) < 3
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP CHARACTER] Data origin character tidak valid."
+        );
+
+        return 0;
+    }
+
+    if (
+        gCreateGender[playerid][0] == EOS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP CHARACTER] Data gender character belum diisi."
+        );
+
+        return 0;
+    }
+
+    if (
+        !CRP_IsValidDOB(
+            gCreateDOB[playerid]
+        )
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP CHARACTER] Data tanggal lahir tidak valid."
+        );
+
+        return 0;
+    }
+
+    if (
+        gCreateReligion[playerid][0] == EOS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP CHARACTER] Data agama character belum diisi."
         );
 
         return 0;
@@ -1008,6 +1223,18 @@ public CRP_SaveCreatedCharacter(
     // SAVE TO STORAGE
     //
     // Storage yang menentukan PRID.
+    //
+    // Parameter:
+    // playerid
+    // slot
+    // charactername
+    // level
+    // origin
+    // gender
+    // dob
+    // religion
+    // lastip
+    // lastlogout
     // --------------------------------------------------------
 
     saved = CallRemoteFunction(
@@ -1030,7 +1257,9 @@ public CRP_SaveCreatedCharacter(
     // SAVE FAILED
     // --------------------------------------------------------
 
-    if (!saved)
+    if (
+        !saved
+    )
     {
         SendClientMessage(
             playerid,
@@ -1044,6 +1273,8 @@ public CRP_SaveCreatedCharacter(
 
     // --------------------------------------------------------
     // GET PRID
+    //
+    // PRID dibuat dan dikontrol oleh Storage.
     // --------------------------------------------------------
 
     prid = CallRemoteFunction(
@@ -1144,6 +1375,13 @@ public CRP_CancelCharacterCreation(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
     CRP_ResetCharacterCreation(
         playerid
     );
@@ -1198,12 +1436,13 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Creation System v0.4");
+    print(" CRP Character Creation System v0.5");
     print(" Logic System Loaded");
     print(" TextDraw UI Separated");
     print(" Character Storage Interface Loaded");
     print(" Global PRID Integration Loaded");
     print(" Register Spawn Integration Loaded");
+    print(" Creation State Validation Loaded");
     print("---------------------------------------");
 
     return 1;
