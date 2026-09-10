@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Creation System v0.5
+// Character Creation System v0.4
 //
 // Fungsi:
 // - Logic pembuatan karakter
@@ -72,20 +72,6 @@ new gCreateOrigin[MAX_PLAYERS][64];
 new gCreateGender[MAX_PLAYERS][16];
 new gCreateDOB[MAX_PLAYERS][16];
 new gCreateReligion[MAX_PLAYERS][24];
-
-
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-stock CRP_Create_StripNewline(string[])
-{
-    new len = strlen(string);
-    while (len > 0 && (string[len - 1] == '\r' || string[len - 1] == '\n'))
-    {
-        string[--len] = '\0';
-    }
-}
 
 
 // ============================================================
@@ -430,8 +416,6 @@ stock CRP_IsCharacterNameUsed(
             sizeof(lastlogin)
         );
 
-        CRP_Create_StripNewline(charactername);
-
         if (
             !strcmp(
                 charactername,
@@ -578,8 +562,6 @@ public CRP_CreateName(
         return 0;
     }
 
-    CRP_Create_StripNewline(input);
-
     if (
         !CRP_IsValidCharacterName(
             input
@@ -652,8 +634,6 @@ public CRP_CreateOrigin(
     {
         return 0;
     }
-
-    CRP_Create_StripNewline(input);
 
     if (
         strlen(input) < 3
@@ -821,8 +801,6 @@ public CRP_CreateDOB(
     {
         return 0;
     }
-
-    CRP_Create_StripNewline(input);
 
     if (
         !CRP_IsValidDOB(
@@ -1220,7 +1198,7 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Creation System v0.5");
+    print(" CRP Character Creation System v0.4");
     print(" Logic System Loaded");
     print(" TextDraw UI Separated");
     print(" Character Storage Interface Loaded");
