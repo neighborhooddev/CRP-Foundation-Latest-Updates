@@ -2,49 +2,35 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Storage System v0.9
+// Storage System v1.0
 //
-// Fungsi:
-// - Penyimpanan account menggunakan scriptfiles
-// - Membuat account baru
-// - Mengecek account
-// - Load account
-// - Save account
-// - Verifikasi password
-// - Penyimpanan 5 slot karakter
-// - Data karakter lengkap
-// - Last Login
-// - Last Logout
-// - Last IP
-// - Register IP Registry
-// - Player Registry ID (PRID / PURI)
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
-// STORAGE:
+// Fokus v1.0:
+// - Account Storage
+// - Account Registration
+// - Account Login Verification
+// - IP Registry
+// - 5 Character Slots
+// - Character Creation Storage
+// - Character Basic Data
+// - Character Full Data
+// - Global PRID
+// - Character Last Login
+// - Character Last Logout
+// - Remote API Contract
 //
+// Storage:
 // scriptfiles/
 // ├── accounts/
+// │   └── Username.ini
 // ├── ip_registry/
+// │   └── ip_registry.ini
 // └── registry/
 //     ├── prid_counter.ini
 //     └── characters/
-//         ├── 001.ini
-//         ├── 002.ini
-//         └── ...
-//
-// PRID:
-// - Setiap character memiliki PRID unik secara global.
-// - PRID dimulai dari 001.
-// - PRID terus bertambah.
-// - PRID tidak berubah ketika nama character berubah.
-// - PRID tidak berubah ketika character berpindah slot.
-// - PRID tidak berubah ketika player logout/reconnect.
-// - PRID tidak digunakan ulang.
-//
-// LAST LOGIN:
-// - Menyimpan waktu terakhir character berhasil diaktifkan/login.
-//
-// LAST LOGOUT:
-// - Menyimpan waktu terakhir character logout/disconnect.
+//         └── 001.ini
 //
 // ============================================================
 
@@ -54,10 +40,10 @@
 // ============================================================
 
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
 
 
 // ============================================================
@@ -77,7 +63,7 @@
 
 
 // ============================================================
-// ACCOUNT DATA
+// ACCOUNT CACHE
 // ============================================================
 
 new gStoragePassword[MAX_PLAYERS][65];
@@ -86,7 +72,7 @@ new gStorageRegisterIP[MAX_PLAYERS][16];
 
 
 // ============================================================
-// CHARACTER DATA
+// CHARACTER CACHE
 // ============================================================
 
 new gStorageCharacterPRID[MAX_PLAYERS]
@@ -121,11 +107,61 @@ new gStorageCharacterLastLogout[MAX_PLAYERS]
 
 
 // ============================================================
-// RESET STORAGE
+// PLAYER VALIDATION
+// ============================================================
+
+stock CRP_StorageIsValidPlayer(playerid)
+{
+    if (playerid < 0)
+    {
+        return 0;
+    }
+
+    if (playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// SLOT VALIDATION
+// ============================================================
+
+stock CRP_StorageIsValidSlot(slot)
+{
+    if (slot < 0)
+    {
+        return 0;
+    }
+
+    if (slot >= CRP_CHARACTER_SLOT_COUNT)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// RESET
 // ============================================================
 
 stock CRP_StorageReset(playerid)
 {
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
     gStoragePassword[playerid][0] = EOS;
     gStorageEmail[playerid][0] = EOS;
     gStorageRegisterIP[playerid][0] = EOS;
@@ -143,17 +179,12 @@ stock CRP_StorageReset(playerid)
         gStorageCharacterLevel[playerid][slot] = 0;
 
         gStorageCharacterOrigin[playerid][slot][0] = EOS;
-
         gStorageCharacterGender[playerid][slot][0] = EOS;
-
         gStorageCharacterDOB[playerid][slot][0] = EOS;
-
         gStorageCharacterReligion[playerid][slot][0] = EOS;
 
         gStorageCharacterLastIP[playerid][slot][0] = EOS;
-
         gStorageCharacterLastLogin[playerid][slot][0] = EOS;
-
         gStorageCharacterLastLogout[playerid][slot][0] = EOS;
     }
 
@@ -162,7 +193,7 @@ stock CRP_StorageReset(playerid)
 
 
 // ============================================================
-// GET ACCOUNT FILE
+// ACCOUNT FILE
 // ============================================================
 
 stock CRP_GetAccountFile(
@@ -172,6 +203,12 @@ stock CRP_GetAccountFile(
 )
 {
     new name[MAX_PLAYER_NAME];
+
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        filepath[0] = EOS;
+        return 0;
+    }
 
     GetPlayerName(
         playerid,
@@ -191,7 +228,7 @@ stock CRP_GetAccountFile(
 
 
 // ============================================================
-// GET PLAYER IP
+// PLAYER IP
 // ============================================================
 
 stock CRP_StorageGetPlayerIP(
@@ -200,6 +237,12 @@ stock CRP_StorageGetPlayerIP(
     size
 )
 {
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        ip[0] = EOS;
+        return 0;
+    }
+
     GetPlayerIp(
         playerid,
         ip,
@@ -211,15 +254,9 @@ stock CRP_StorageGetPlayerIP(
 
 
 // ============================================================
-// GET CURRENT DATETIME
-//
+// CURRENT DATETIME
 // Format:
-//
 // DD/MM/YYYY HH:MM:SS
-//
-// Contoh:
-//
-// 09/09/2026 22:15:30
 // ============================================================
 
 stock CRP_StorageGetCurrentDateTime(
@@ -264,18 +301,21 @@ stock CRP_StorageGetCurrentDateTime(
 
 
 // ============================================================
-// CHECK ACCOUNT
+// ACCOUNT EXISTS
 // ============================================================
 
 stock CRP_StorageAccountExists(playerid)
 {
     new filepath[128];
 
-    CRP_GetAccountFile(
+    if (!CRP_GetAccountFile(
         playerid,
         filepath,
         sizeof(filepath)
-    );
+    ))
+    {
+        return 0;
+    }
 
     if (fexist(filepath))
     {
@@ -287,24 +327,24 @@ stock CRP_StorageAccountExists(playerid)
 
 
 // ============================================================
-// CHECK IP REGISTRY
-//
-// Return:
-// 0 = IP belum pernah register
-// 1 = IP sudah pernah register
+// IP REGISTRY CHECK
 // ============================================================
 
 stock CRP_StorageIPAlreadyRegistered(playerid)
 {
     new ip[16];
     new line[144];
+
     new File:file;
 
-    CRP_StorageGetPlayerIP(
+    if (!CRP_StorageGetPlayerIP(
         playerid,
         ip,
         sizeof(ip)
-    );
+    ))
+    {
+        return 0;
+    }
 
     file = fopen(
         CRP_IP_REGISTRY_FILE,
@@ -341,28 +381,25 @@ stock CRP_StorageIPAlreadyRegistered(playerid)
 
 // ============================================================
 // REGISTER IP
-//
-// Format:
-//
-// IP=UCP
-//
-// Contoh:
-//
-// 123.123.123.123=Muhammad_Rizal
 // ============================================================
 
 stock CRP_StorageRegisterIP(playerid)
 {
     new ip[16];
     new name[MAX_PLAYER_NAME];
-    new File:file;
+
     new line[144];
 
-    CRP_StorageGetPlayerIP(
+    new File:file;
+
+    if (!CRP_StorageGetPlayerIP(
         playerid,
         ip,
         sizeof(ip)
-    );
+    ))
+    {
+        return 0;
+    }
 
     GetPlayerName(
         playerid,
@@ -371,7 +408,9 @@ stock CRP_StorageRegisterIP(playerid)
     );
 
     if (
-        CRP_StorageIPAlreadyRegistered(playerid)
+        CRP_StorageIPAlreadyRegistered(
+            playerid
+        )
     )
     {
         return 0;
@@ -407,7 +446,7 @@ stock CRP_StorageRegisterIP(playerid)
     fclose(file);
 
     printf(
-        "[CRP STORAGE] Register IP tercatat: %s -> %s",
+        "[CRP STORAGE] IP Registry: %s -> %s",
         ip,
         name
     );
@@ -417,13 +456,14 @@ stock CRP_StorageRegisterIP(playerid)
 
 
 // ============================================================
-// PRID COUNTER
+// PRID GET NEXT
 // ============================================================
 
 stock CRP_PRID_GetNext()
 {
     new File:file;
     new line[64];
+
     new nextprid = 1;
 
     file = fopen(
@@ -468,7 +508,7 @@ stock CRP_PRID_GetNext()
 
 
 // ============================================================
-// SAVE NEXT PRID
+// PRID SAVE NEXT
 // ============================================================
 
 stock CRP_PRID_SaveNext(nextprid)
@@ -520,20 +560,23 @@ stock CRP_PRID_Generate()
     prid =
         CRP_PRID_GetNext();
 
+    if (prid < 1)
+    {
+        prid = 1;
+    }
+
     nextprid =
         prid + 1;
 
-    if (
-        !CRP_PRID_SaveNext(
-            nextprid
-        )
-    )
+    if (!CRP_PRID_SaveNext(
+        nextprid
+    ))
     {
         return 0;
     }
 
     printf(
-        "[CRP STORAGE] PRID baru dibuat: %03d",
+        "[CRP STORAGE] PRID generated: %03d",
         prid
     );
 
@@ -563,7 +606,7 @@ stock CRP_PRID_Format(
 
 
 // ============================================================
-// GET PRID CHARACTER FILE
+// PRID CHARACTER FILE
 // ============================================================
 
 stock CRP_PRID_GetCharacterFile(
@@ -592,7 +635,7 @@ stock CRP_PRID_GetCharacterFile(
 
 
 // ============================================================
-// SAVE / UPDATE CHARACTER REGISTRY
+// REGISTER CHARACTER TO PRID REGISTRY
 // ============================================================
 
 stock CRP_PRID_RegisterCharacter(
@@ -603,22 +646,24 @@ stock CRP_PRID_RegisterCharacter(
 )
 {
     new accountname[MAX_PLAYER_NAME];
+
     new filepath[128];
-    new File:file;
     new line[256];
     new pridtext[16];
 
-    if (
-        prid <= 0
-    )
+    new File:file;
+
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         return 0;
     }
 
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidSlot(slot))
+    {
+        return 0;
+    }
+
+    if (prid <= 0)
     {
         return 0;
     }
@@ -707,8 +752,8 @@ stock CRP_PRID_RegisterCharacter(
     fclose(file);
 
     printf(
-        "[CRP STORAGE] PRID Registry tersimpan | PRID=%s | Character=%s | Slot=%d",
-        pridtext,
+        "[CRP STORAGE] PRID Registry saved | PRID=%03d | Character=%s | Slot=%d",
+        prid,
         charactername,
         slot + 1
     );
@@ -721,10 +766,9 @@ stock CRP_PRID_RegisterCharacter(
 // CREATE ACCOUNT
 //
 // Return:
-//
 // 0 = gagal
 // 1 = berhasil
-// 2 = IP sudah digunakan
+// 2 = IP sudah terdaftar
 // ============================================================
 
 stock CRP_StorageCreateAccount(
@@ -734,19 +778,24 @@ stock CRP_StorageCreateAccount(
 )
 {
     new filepath[128];
-    new File:file;
-    new line[144];
+    new line[256];
+
     new ip[16];
     new name[MAX_PLAYER_NAME];
 
+    new File:file;
+
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
-        CRP_StorageAccountExists(playerid)
+        CRP_StorageAccountExists(
+            playerid
+        )
     )
     {
-        printf(
-            "[CRP STORAGE] Account sudah ada."
-        );
-
         return 0;
     }
 
@@ -757,14 +806,11 @@ stock CRP_StorageCreateAccount(
     );
 
     if (
-        CRP_StorageIPAlreadyRegistered(playerid)
+        CRP_StorageIPAlreadyRegistered(
+            playerid
+        )
     )
     {
-        printf(
-            "[CRP STORAGE] REGISTER DITOLAK - IP sudah terdaftar: %s",
-            ip
-        );
-
         return 2;
     }
 
@@ -993,9 +1039,9 @@ stock CRP_StorageCreateAccount(
 
     fclose(file);
 
-    if (
-        !CRP_StorageRegisterIP(playerid)
-    )
+    if (!CRP_StorageRegisterIP(
+        playerid
+    ))
     {
         printf(
             "[CRP STORAGE] WARNING: Account dibuat tetapi IP Registry gagal disimpan."
@@ -1003,7 +1049,7 @@ stock CRP_StorageCreateAccount(
     }
 
     printf(
-        "[CRP STORAGE] Account berhasil dibuat: %s",
+        "[CRP STORAGE] Account created: %s",
         filepath
     );
 
@@ -1015,12 +1061,20 @@ stock CRP_StorageCreateAccount(
 // SAVE ACCOUNT
 // ============================================================
 
-stock CRP_StorageSaveAccount(playerid)
+stock CRP_StorageSaveAccount(
+    playerid
+)
 {
     new filepath[128];
-    new File:file;
     new line[256];
     new name[MAX_PLAYER_NAME];
+
+    new File:file;
+
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        return 0;
+    }
 
     CRP_GetAccountFile(
         playerid,
@@ -1035,11 +1089,6 @@ stock CRP_StorageSaveAccount(playerid)
 
     if (!file)
     {
-        printf(
-            "[CRP STORAGE] Gagal membuka file: %s",
-            filepath
-        );
-
         return 0;
     }
 
@@ -1236,11 +1285,6 @@ stock CRP_StorageSaveAccount(playerid)
 
     fclose(file);
 
-    printf(
-        "[CRP STORAGE] Account berhasil disimpan: %s",
-        filepath
-    );
-
     return 1;
 }
 
@@ -1249,11 +1293,26 @@ stock CRP_StorageSaveAccount(playerid)
 // LOAD ACCOUNT
 // ============================================================
 
-stock CRP_StorageLoadAccount(playerid)
+stock CRP_StorageLoadAccount(
+    playerid
+)
 {
     new filepath[128];
-    new File:file;
     new line[256];
+
+    new File:file;
+
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageAccountExists(
+        playerid
+    ))
+    {
+        return 0;
+    }
 
     CRP_GetAccountFile(
         playerid,
@@ -1268,11 +1327,6 @@ stock CRP_StorageLoadAccount(playerid)
 
     if (!file)
     {
-        printf(
-            "[CRP STORAGE] Account tidak ditemukan: %s",
-            filepath
-        );
-
         return 0;
     }
 
@@ -1280,7 +1334,10 @@ stock CRP_StorageLoadAccount(playerid)
         playerid
     );
 
-    while (fread(file, line))
+    while (fread(
+        file,
+        line
+    ))
     {
         if (
             !strcmp(
@@ -1345,16 +1402,13 @@ stock CRP_StorageLoadAccount(playerid)
             slot++
         )
         {
-            new slotnumber;
+            new slotnumber = slot + 1;
 
-            slotnumber =
-                slot + 1;
-
-            new keyPRID[32];
+            new key[64];
 
             format(
-                keyPRID,
-                sizeof(keyPRID),
+                key,
+                sizeof(key),
                 "Slot%d_PRID=",
                 slotnumber
             );
@@ -1362,26 +1416,23 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyPRID,
+                    key,
                     true,
-                    strlen(keyPRID)
+                    strlen(key)
                 )
             )
             {
                 gStorageCharacterPRID[playerid][slot] =
                     strval(
-                        line[strlen(keyPRID)]
+                        line[strlen(key)]
                     );
 
                 break;
             }
 
-
-            new keyName[32];
-
             format(
-                keyName,
-                sizeof(keyName),
+                key,
+                sizeof(key),
                 "Slot%d_Name=",
                 slotnumber
             );
@@ -1389,9 +1440,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyName,
+                    key,
                     true,
-                    strlen(keyName)
+                    strlen(key)
                 )
             )
             {
@@ -1399,18 +1450,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterName[playerid][slot],
                     25,
                     "%s",
-                    line[strlen(keyName)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyLevel[32];
-
             format(
-                keyLevel,
-                sizeof(keyLevel),
+                key,
+                sizeof(key),
                 "Slot%d_Level=",
                 slotnumber
             );
@@ -1418,26 +1466,23 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyLevel,
+                    key,
                     true,
-                    strlen(keyLevel)
+                    strlen(key)
                 )
             )
             {
                 gStorageCharacterLevel[playerid][slot] =
                     strval(
-                        line[strlen(keyLevel)]
+                        line[strlen(key)]
                     );
 
                 break;
             }
 
-
-            new keyOrigin[32];
-
             format(
-                keyOrigin,
-                sizeof(keyOrigin),
+                key,
+                sizeof(key),
                 "Slot%d_Origin=",
                 slotnumber
             );
@@ -1445,9 +1490,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyOrigin,
+                    key,
                     true,
-                    strlen(keyOrigin)
+                    strlen(key)
                 )
             )
             {
@@ -1455,18 +1500,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterOrigin[playerid][slot],
                     64,
                     "%s",
-                    line[strlen(keyOrigin)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyGender[32];
-
             format(
-                keyGender,
-                sizeof(keyGender),
+                key,
+                sizeof(key),
                 "Slot%d_Gender=",
                 slotnumber
             );
@@ -1474,9 +1516,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyGender,
+                    key,
                     true,
-                    strlen(keyGender)
+                    strlen(key)
                 )
             )
             {
@@ -1484,18 +1526,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterGender[playerid][slot],
                     16,
                     "%s",
-                    line[strlen(keyGender)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyDOB[32];
-
             format(
-                keyDOB,
-                sizeof(keyDOB),
+                key,
+                sizeof(key),
                 "Slot%d_DOB=",
                 slotnumber
             );
@@ -1503,9 +1542,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyDOB,
+                    key,
                     true,
-                    strlen(keyDOB)
+                    strlen(key)
                 )
             )
             {
@@ -1513,18 +1552,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterDOB[playerid][slot],
                     16,
                     "%s",
-                    line[strlen(keyDOB)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyReligion[32];
-
             format(
-                keyReligion,
-                sizeof(keyReligion),
+                key,
+                sizeof(key),
                 "Slot%d_Religion=",
                 slotnumber
             );
@@ -1532,9 +1568,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyReligion,
+                    key,
                     true,
-                    strlen(keyReligion)
+                    strlen(key)
                 )
             )
             {
@@ -1542,18 +1578,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterReligion[playerid][slot],
                     24,
                     "%s",
-                    line[strlen(keyReligion)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyLastIP[32];
-
             format(
-                keyLastIP,
-                sizeof(keyLastIP),
+                key,
+                sizeof(key),
                 "Slot%d_LastIP=",
                 slotnumber
             );
@@ -1561,9 +1594,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyLastIP,
+                    key,
                     true,
-                    strlen(keyLastIP)
+                    strlen(key)
                 )
             )
             {
@@ -1571,18 +1604,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterLastIP[playerid][slot],
                     16,
                     "%s",
-                    line[strlen(keyLastIP)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyLastLogin[32];
-
             format(
-                keyLastLogin,
-                sizeof(keyLastLogin),
+                key,
+                sizeof(key),
                 "Slot%d_LastLogin=",
                 slotnumber
             );
@@ -1590,9 +1620,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyLastLogin,
+                    key,
                     true,
-                    strlen(keyLastLogin)
+                    strlen(key)
                 )
             )
             {
@@ -1600,18 +1630,15 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterLastLogin[playerid][slot],
                     32,
                     "%s",
-                    line[strlen(keyLastLogin)]
+                    line[strlen(key)]
                 );
 
                 break;
             }
 
-
-            new keyLastLogout[32];
-
             format(
-                keyLastLogout,
-                sizeof(keyLastLogout),
+                key,
+                sizeof(key),
                 "Slot%d_LastLogout=",
                 slotnumber
             );
@@ -1619,9 +1646,9 @@ stock CRP_StorageLoadAccount(playerid)
             if (
                 !strcmp(
                     line,
-                    keyLastLogout,
+                    key,
                     true,
-                    strlen(keyLastLogout)
+                    strlen(key)
                 )
             )
             {
@@ -1629,7 +1656,7 @@ stock CRP_StorageLoadAccount(playerid)
                     gStorageCharacterLastLogout[playerid][slot],
                     32,
                     "%s",
-                    line[strlen(keyLastLogout)]
+                    line[strlen(key)]
                 );
 
                 break;
@@ -1638,11 +1665,6 @@ stock CRP_StorageLoadAccount(playerid)
     }
 
     fclose(file);
-
-    printf(
-        "[CRP STORAGE] Account berhasil dimuat: %s",
-        filepath
-    );
 
     return 1;
 }
@@ -1657,16 +1679,21 @@ stock CRP_StorageCheckPassword(
     password[]
 )
 {
-    if (
-        !CRP_StorageAccountExists(playerid)
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         return 0;
     }
 
-    if (
-        !CRP_StorageLoadAccount(playerid)
-    )
+    if (!CRP_StorageAccountExists(
+        playerid
+    ))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageLoadAccount(
+        playerid
+    ))
     {
         return 0;
     }
@@ -1687,42 +1714,6 @@ stock CRP_StorageCheckPassword(
 
 
 // ============================================================
-// SET ACCOUNT DATA
-// ============================================================
-
-stock CRP_StorageSetPassword(
-    playerid,
-    password[]
-)
-{
-    format(
-        gStoragePassword[playerid],
-        65,
-        "%s",
-        password
-    );
-
-    return 1;
-}
-
-
-stock CRP_StorageSetEmail(
-    playerid,
-    email[]
-)
-{
-    format(
-        gStorageEmail[playerid],
-        65,
-        "%s",
-        email
-    );
-
-    return 1;
-}
-
-
-// ============================================================
 // CHARACTER EXISTS
 // ============================================================
 
@@ -1731,15 +1722,19 @@ stock CRP_StorageCharacterExists(
     slot
 )
 {
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageIsValidSlot(slot))
     {
         return 0;
     }
 
     if (
+        gStorageCharacterPRID[playerid][slot] > 0
+        &&
         strlen(
             gStorageCharacterName[playerid][slot]
         ) > 0
@@ -1761,10 +1756,12 @@ stock CRP_StorageGetCharacterPRID(
     slot
 )
 {
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageIsValidSlot(slot))
     {
         return 0;
     }
@@ -1776,16 +1773,6 @@ stock CRP_StorageGetCharacterPRID(
 
 // ============================================================
 // SAVE CHARACTER SLOT
-//
-// Parameter tetap sama agar kompatibel dengan
-// crp_character_create.pwn v0.4.
-//
-// Saat character baru dibuat:
-// - LastLogin dikosongkan.
-// - LastLogout mengikuti parameter.
-//
-// Character activation nanti akan mengisi LastLogin.
-//
 // ============================================================
 
 stock CRP_StorageSaveCharacterSlot(
@@ -1803,14 +1790,25 @@ stock CRP_StorageSaveCharacterSlot(
 {
     new prid;
     new isnewcharacter;
-    new registrySaved;
 
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         return 0;
+    }
+
+    if (!CRP_StorageIsValidSlot(slot))
+    {
+        return 0;
+    }
+
+    if (strlen(charactername) < 1)
+    {
+        return 0;
+    }
+
+    if (level < 1)
+    {
+        level = 1;
     }
 
     isnewcharacter =
@@ -1822,11 +1820,6 @@ stock CRP_StorageSaveCharacterSlot(
     prid =
         gStorageCharacterPRID[playerid][slot];
 
-
-    // --------------------------------------------------------
-    // CHARACTER BARU
-    // --------------------------------------------------------
-
     if (
         isnewcharacter &&
         prid == 0
@@ -1837,21 +1830,12 @@ stock CRP_StorageSaveCharacterSlot(
 
         if (!prid)
         {
-            printf(
-                "[CRP STORAGE] Gagal membuat PRID."
-            );
-
             return 0;
         }
 
         gStorageCharacterPRID[playerid][slot] =
             prid;
     }
-
-
-    // --------------------------------------------------------
-    // UPDATE CHARACTER DATA
-    // --------------------------------------------------------
 
     format(
         gStorageCharacterName[playerid][slot],
@@ -1905,60 +1889,28 @@ stock CRP_StorageSaveCharacterSlot(
         lastlogout
     );
 
-
-    // --------------------------------------------------------
-    // CHARACTER BARU
-    //
-    // Jangan mengisi LastLogin saat creation.
-    // LastLogin akan diisi saat character benar-benar aktif.
-    // --------------------------------------------------------
-
     if (isnewcharacter)
     {
-        gStorageCharacterLastLogin[playerid][slot][0] = EOS;
+        gStorageCharacterLastLogin[playerid][slot][0] =
+            EOS;
     }
 
-
-    // --------------------------------------------------------
-    // SAVE ACCOUNT
-    // --------------------------------------------------------
-
-    if (
-        !CRP_StorageSaveAccount(
-            playerid
-        )
-    )
+    if (!CRP_StorageSaveAccount(
+        playerid
+    ))
     {
         return 0;
     }
 
-
-    // --------------------------------------------------------
-    // SAVE / UPDATE PRID REGISTRY
-    // --------------------------------------------------------
-
-    registrySaved =
-        CRP_PRID_RegisterCharacter(
-            playerid,
-            slot,
-            prid,
-            charactername
-        );
-
-    if (!registrySaved)
-    {
-        printf(
-            "[CRP STORAGE] WARNING: Character tersimpan tetapi Registry PRID gagal diperbarui."
-        );
-    }
-
-
-    // --------------------------------------------------------
-    // LOG
-    // --------------------------------------------------------
+    CRP_PRID_RegisterCharacter(
+        playerid,
+        slot,
+        prid,
+        charactername
+    );
 
     printf(
-        "[CRP STORAGE] Character disimpan | PRID=%03d | Slot=%d | Name=%s",
+        "[CRP STORAGE] Character saved | PRID=%03d | Slot=%d | Name=%s",
         prid,
         slot + 1,
         charactername
@@ -1970,16 +1922,6 @@ stock CRP_StorageSaveCharacterSlot(
 
 // ============================================================
 // UPDATE CHARACTER LAST LOGIN
-//
-// Dipanggil saat character berhasil diaktifkan.
-//
-// Yang diperbarui:
-// - LastLogin
-// - LastIP
-//
-// PRID tidak berubah.
-// Nama tidak berubah.
-// Slot tidak berubah.
 // ============================================================
 
 stock CRP_StorageUpdateCharacterLastLogin(
@@ -1990,20 +1932,20 @@ stock CRP_StorageUpdateCharacterLastLogin(
     new ip[16];
     new datetime[32];
 
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         return 0;
     }
 
-    if (
-        !CRP_StorageCharacterExists(
-            playerid,
-            slot
-        )
-    )
+    if (!CRP_StorageIsValidSlot(slot))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageCharacterExists(
+        playerid,
+        slot
+    ))
     {
         return 0;
     }
@@ -2033,22 +1975,12 @@ stock CRP_StorageUpdateCharacterLastLogin(
         datetime
     );
 
-    if (
-        !CRP_StorageSaveAccount(
-            playerid
-        )
-    )
+    if (!CRP_StorageSaveAccount(
+        playerid
+    ))
     {
         return 0;
     }
-
-    printf(
-        "[CRP STORAGE] LastLogin diperbarui | PRID=%03d | Character=%s | IP=%s | Time=%s",
-        gStorageCharacterPRID[playerid][slot],
-        gStorageCharacterName[playerid][slot],
-        ip,
-        datetime
-    );
 
     return 1;
 }
@@ -2056,15 +1988,6 @@ stock CRP_StorageUpdateCharacterLastLogin(
 
 // ============================================================
 // UPDATE CHARACTER LAST LOGOUT
-//
-// Dipanggil nanti saat character logout/disconnect.
-//
-// Yang diperbarui:
-// - LastLogout
-// - LastIP
-//
-// LastLogin tidak disentuh.
-// PRID tidak berubah.
 // ============================================================
 
 stock CRP_StorageUpdateCharacterLastLogout(
@@ -2075,20 +1998,20 @@ stock CRP_StorageUpdateCharacterLastLogout(
     new ip[16];
     new datetime[32];
 
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         return 0;
     }
 
-    if (
-        !CRP_StorageCharacterExists(
-            playerid,
-            slot
-        )
-    )
+    if (!CRP_StorageIsValidSlot(slot))
+    {
+        return 0;
+    }
+
+    if (!CRP_StorageCharacterExists(
+        playerid,
+        slot
+    ))
     {
         return 0;
     }
@@ -2118,33 +2041,19 @@ stock CRP_StorageUpdateCharacterLastLogout(
         datetime
     );
 
-    if (
-        !CRP_StorageSaveAccount(
-            playerid
-        )
-    )
+    if (!CRP_StorageSaveAccount(
+        playerid
+    ))
     {
         return 0;
     }
-
-    printf(
-        "[CRP STORAGE] LastLogout diperbarui | PRID=%03d | Character=%s | IP=%s | Time=%s",
-        gStorageCharacterPRID[playerid][slot],
-        gStorageCharacterName[playerid][slot],
-        ip,
-        datetime
-    );
 
     return 1;
 }
 
 
 // ============================================================
-// GET CHARACTER BASIC SLOT DATA
-//
-// Sekarang LastLogin benar-benar mengambil
-// gStorageCharacterLastLogin.
-//
+// GET BASIC CHARACTER SLOT
 // ============================================================
 
 stock CRP_StorageGetCharacterSlot(
@@ -2157,10 +2066,16 @@ stock CRP_StorageGetCharacterSlot(
     lastloginsize
 )
 {
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
+    {
+        charactername[0] = EOS;
+        lastlogin[0] = EOS;
+        level = 0;
+
+        return 0;
+    }
+
+    if (!CRP_StorageIsValidSlot(slot))
     {
         charactername[0] = EOS;
         lastlogin[0] = EOS;
@@ -2191,19 +2106,7 @@ stock CRP_StorageGetCharacterSlot(
 
 
 // ============================================================
-// GET CHARACTER FULL DATA
-//
-// Sekarang mencakup:
-//
-// - Character Name
-// - Level
-// - Origin
-// - Gender
-// - DOB
-// - Religion
-// - Last IP
-// - Last Login
-// - Last Logout
+// GET FULL CHARACTER DATA
 // ============================================================
 
 stock CRP_StorageGetCharacterFullData(
@@ -2228,10 +2131,7 @@ stock CRP_StorageGetCharacterFullData(
     logoutsize
 )
 {
-    if (
-        slot < 0 ||
-        slot >= CRP_CHARACTER_SLOT_COUNT
-    )
+    if (!CRP_StorageIsValidPlayer(playerid))
     {
         charactername[0] = EOS;
         origin[0] = EOS;
@@ -2241,7 +2141,21 @@ stock CRP_StorageGetCharacterFullData(
         lastip[0] = EOS;
         lastlogin[0] = EOS;
         lastlogout[0] = EOS;
+        level = 0;
 
+        return 0;
+    }
+
+    if (!CRP_StorageIsValidSlot(slot))
+    {
+        charactername[0] = EOS;
+        origin[0] = EOS;
+        gender[0] = EOS;
+        dob[0] = EOS;
+        religion[0] = EOS;
+        lastip[0] = EOS;
+        lastlogin[0] = EOS;
+        lastlogout[0] = EOS;
         level = 0;
 
         return 0;
@@ -2311,7 +2225,12 @@ stock CRP_StorageGetCharacterFullData(
 
 
 // ============================================================
-// REMOTE FUNCTIONS
+// REMOTE API
+// ============================================================
+
+
+// ============================================================
+// ACCOUNT EXISTS
 // ============================================================
 
 forward CRP_StorageAccountExistsRemote(
@@ -2329,7 +2248,9 @@ public CRP_StorageAccountExistsRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// IP ALREADY REGISTERED
+// ============================================================
 
 forward CRP_StorageIPAlreadyRegisteredRemote(
     playerid
@@ -2346,7 +2267,9 @@ public CRP_StorageIPAlreadyRegisteredRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// REGISTER IP
+// ============================================================
 
 forward CRP_StorageRegisterIPRemote(
     playerid
@@ -2363,7 +2286,9 @@ public CRP_StorageRegisterIPRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// GET PLAYER IP
+// ============================================================
 
 forward CRP_StorageGetPlayerIPRemote(
     playerid,
@@ -2386,7 +2311,9 @@ public CRP_StorageGetPlayerIPRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// CREATE ACCOUNT
+// ============================================================
 
 forward CRP_StorageCreateAccountRemote(
     playerid,
@@ -2409,7 +2336,9 @@ public CRP_StorageCreateAccountRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// SAVE ACCOUNT
+// ============================================================
 
 forward CRP_StorageSaveAccountRemote(
     playerid
@@ -2426,7 +2355,9 @@ public CRP_StorageSaveAccountRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// LOAD ACCOUNT
+// ============================================================
 
 forward CRP_StorageLoadAccountRemote(
     playerid
@@ -2443,9 +2374,9 @@ public CRP_StorageLoadAccountRemote(
 }
 
 
-// ------------------------------------------------------------
-// CHECK PASSWORD REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// CHECK PASSWORD
+// ============================================================
 
 forward CRP_StorageCheckPasswordRemote(
     playerid,
@@ -2465,7 +2396,9 @@ public CRP_StorageCheckPasswordRemote(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
+// CHARACTER EXISTS
+// ============================================================
 
 forward CRP_StorageCharacterExistsRemote(
     playerid,
@@ -2485,9 +2418,9 @@ public CRP_StorageCharacterExistsRemote(
 }
 
 
-// ------------------------------------------------------------
-// GET CHARACTER PRID REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// GET CHARACTER PRID
+// ============================================================
 
 forward CRP_StorageGetCharacterPRIDRemote(
     playerid,
@@ -2507,9 +2440,9 @@ public CRP_StorageGetCharacterPRIDRemote(
 }
 
 
-// ------------------------------------------------------------
-// GET CHARACTER BASIC SLOT REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// GET CHARACTER BASIC SLOT
+// ============================================================
 
 forward CRP_StorageGetCharacterSlotRemote(
     playerid,
@@ -2544,12 +2477,9 @@ public CRP_StorageGetCharacterSlotRemote(
 }
 
 
-// ------------------------------------------------------------
-// SAVE CHARACTER REMOTE
-//
-// Signature tetap kompatibel dengan
-// crp_character_create.pwn v0.4.
-// ------------------------------------------------------------
+// ============================================================
+// SAVE CHARACTER
+// ============================================================
 
 forward CRP_StorageSaveCharacterSlotRemote(
     playerid,
@@ -2593,9 +2523,9 @@ public CRP_StorageSaveCharacterSlotRemote(
 }
 
 
-// ------------------------------------------------------------
-// UPDATE LAST LOGIN REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// UPDATE LAST LOGIN
+// ============================================================
 
 forward CRP_StorageUpdateCharacterLastLoginRemote(
     playerid,
@@ -2615,9 +2545,9 @@ public CRP_StorageUpdateCharacterLastLoginRemote(
 }
 
 
-// ------------------------------------------------------------
-// UPDATE LAST LOGOUT REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// UPDATE LAST LOGOUT
+// ============================================================
 
 forward CRP_StorageUpdateCharacterLastLogoutRemote(
     playerid,
@@ -2637,9 +2567,9 @@ public CRP_StorageUpdateCharacterLastLogoutRemote(
 }
 
 
-// ------------------------------------------------------------
-// FULL CHARACTER DATA REMOTE
-// ------------------------------------------------------------
+// ============================================================
+// GET FULL CHARACTER DATA
+// ============================================================
 
 forward CRP_StorageGetCharacterFullDataRemote(
     playerid,
@@ -2809,18 +2739,22 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Storage System v0.9");
-    print(" Scriptfiles Storage Loaded");
-    print(" Account Storage Loaded");
-    print(" 5 Character Slot Storage Loaded");
-    print(" Character Full Data Loaded");
-    print(" Register IP Registry Loaded");
-    print(" Password Verification Loaded");
-    print(" 1 IP = 1 UCP Registration");
-    print(" Global PRID Counter Loaded");
-    print(" Character PRID Registry Loaded");
-    print(" PRID Permanent Identity Loaded");
-    print(" Last Login / Last Logout Loaded");
+    print(" Crystal Roleplay");
+    print(" Storage System v1.0");
+    print("---------------------------------------");
+    print(" Account Storage        : READY");
+    print(" Account Registration   : READY");
+    print(" Account Login          : READY");
+    print(" Password Verification  : READY");
+    print(" IP Registry            : READY");
+    print(" 5 Character Slots      : READY");
+    print(" Character Creation     : READY");
+    print(" Character Basic Data   : READY");
+    print(" Character Full Data    : READY");
+    print(" Character Last Login   : READY");
+    print(" Character Last Logout  : READY");
+    print(" Global PRID Registry   : READY");
+    print(" Remote API Contract    : READY");
     print("---------------------------------------");
 
     return 1;
@@ -2834,7 +2768,7 @@ public OnFilterScriptInit()
 public OnFilterScriptExit()
 {
     print(
-        "[CRP STORAGE] Storage System unloaded."
+        "[CRP STORAGE] Storage System v1.0 unloaded."
     );
 
     return 1;
