@@ -2,7 +2,10 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Login TextDraw System v0.1
+// Login TextDraw System v0.2
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - UI Login
@@ -10,6 +13,7 @@
 // - Tombol LOGIN
 // - Tombol KELUAR
 // - Dialog Password
+// - Sinkronisasi dengan Login System v0.3
 //
 // Logic:
 // crp_login.pwn
@@ -21,33 +25,38 @@
 // CallRemoteFunction()
 // ============================================================
 
+
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREY      0xAAAAAA
-#define COLOR_GREEN     0x33AA33
-#define COLOR_RED       0xFF3333
-#define COLOR_YELLOW    0xFFFF00
+#define COLOR_GREY      0xAAAAAAFF
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_YELLOW    0xFFFF00FF
 
 
 // ============================================================
 // DIALOG
 // ============================================================
 
-#define DIALOG_LOGIN_PASSWORD   2300
+#define DIALOG_LOGIN_PASSWORD    2300
 
 
 // ============================================================
 // PLAYER TEXTDRAW
 // ============================================================
 
-#define TD_BACKGROUND       0
-#define TD_TITLE            1
-#define TD_BODY             2
-#define TD_USERNAME         3
-#define TD_INFO             4
-#define TD_BUTTON_LOGIN     5
-#define TD_BUTTON_CANCEL    6
+#define TD_BACKGROUND            0
+#define TD_TITLE                 1
+#define TD_BODY                  2
+#define TD_USERNAME              3
+#define TD_INFO                  4
+#define TD_BUTTON_LOGIN          5
+#define TD_BUTTON_CANCEL         6
 
-#define LOGIN_TD_COUNT      7
+#define LOGIN_TD_COUNT           7
 
 
 // ============================================================
@@ -61,14 +70,7 @@ new PlayerText:gLoginTD[MAX_PLAYERS][LOGIN_TD_COUNT];
 // LOGIN LOGIC
 // ============================================================
 
-forward CRP_StartLogin(
-    playerid
-);
-
-
-// ============================================================
-// LOGIN PASSWORD
-// ============================================================
+forward CRP_StartLogin(playerid);
 
 forward CRP_LoginPassword(
     playerid,
@@ -80,26 +82,24 @@ forward CRP_LoginPassword(
 // SHOW LOGIN UI REMOTE
 // ============================================================
 
-forward CRP_ShowLoginUIRemote(
-    playerid
-);
+forward CRP_ShowLoginUIRemote(playerid);
 
-public CRP_ShowLoginUIRemote(
-    playerid
-)
+public CRP_ShowLoginUIRemote(playerid)
 {
     if (
-        !IsPlayerConnected(playerid)
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
     )
     {
         return 0;
     }
 
-    CRP_ShowLoginUI(
-        playerid
-    );
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
 
-    return 1;
+    return CRP_ShowLoginUI(playerid);
 }
 
 
@@ -107,10 +107,21 @@ public CRP_ShowLoginUIRemote(
 // CREATE LOGIN TEXTDRAW
 // ============================================================
 
-stock CRP_CreateLoginTextDraw(
-    playerid
-)
+stock CRP_CreateLoginTextDraw(playerid)
 {
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
     new name[MAX_PLAYER_NAME];
     new username[64];
 
@@ -364,7 +375,7 @@ stock CRP_CreateLoginTextDraw(
             playerid,
             320.0,
             350.0,
-            "[  LOGIN  ]"
+            "[ LOGIN ]"
         );
 
     PlayerTextDrawLetterSize(
@@ -414,7 +425,7 @@ stock CRP_CreateLoginTextDraw(
             playerid,
             320.0,
             380.0,
-            "[  KELUAR  ]"
+            "[ KELUAR ]"
         );
 
     PlayerTextDrawLetterSize(
@@ -462,10 +473,21 @@ stock CRP_CreateLoginTextDraw(
 // SHOW LOGIN UI
 // ============================================================
 
-stock CRP_ShowLoginUI(
-    playerid
-)
+stock CRP_ShowLoginUI(playerid)
 {
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
     for (
         new i = 0;
         i < LOGIN_TD_COUNT;
@@ -491,10 +513,21 @@ stock CRP_ShowLoginUI(
 // HIDE LOGIN UI
 // ============================================================
 
-stock CRP_HideLoginUI(
-    playerid
-)
+stock CRP_HideLoginUI(playerid)
 {
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
     for (
         new i = 0;
         i < LOGIN_TD_COUNT;
@@ -507,9 +540,7 @@ stock CRP_HideLoginUI(
         );
     }
 
-    CancelSelectTextDraw(
-        playerid
-    );
+    CancelSelectTextDraw(playerid);
 
     return 1;
 }
@@ -519,13 +550,22 @@ stock CRP_HideLoginUI(
 // SHOW PASSWORD DIALOG
 // ============================================================
 
-stock CRP_ShowLoginPassword(
-    playerid
-)
+stock CRP_ShowLoginPassword(playerid)
 {
-    CRP_HideLoginUI(
-        playerid
-    );
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    CRP_HideLoginUI(playerid);
 
     ShowPlayerDialog(
         playerid,
@@ -545,13 +585,9 @@ stock CRP_ShowLoginPassword(
 // PLAYER CONNECT
 // ============================================================
 
-public OnPlayerConnect(
-    playerid
-)
+public OnPlayerConnect(playerid)
 {
-    CRP_CreateLoginTextDraw(
-        playerid
-    );
+    CRP_CreateLoginTextDraw(playerid);
 
     return 1;
 }
@@ -592,34 +628,53 @@ public OnPlayerClickPlayerTextDraw(
 )
 {
     if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------------
+
+    if (
         playertextid
         == gLoginTD[playerid][TD_BUTTON_LOGIN]
     )
     {
-        CRP_ShowLoginPassword(
-            playerid
-        );
-
-        return 1;
+        return CRP_ShowLoginPassword(playerid);
     }
 
+
+    // --------------------------------------------------------
+    // KELUAR
+    // --------------------------------------------------------
 
     if (
         playertextid
         == gLoginTD[playerid][TD_BUTTON_CANCEL]
     )
     {
-        CancelSelectTextDraw(
-            playerid
+        CancelSelectTextDraw(playerid);
+
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP LOGIN] Login dibatalkan."
         );
 
-        Kick(
-            playerid
-        );
+        Kick(playerid);
 
         return 1;
     }
-
 
     return 0;
 }
@@ -645,6 +700,19 @@ public OnDialogResponse(
         return 0;
     }
 
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
 
     // --------------------------------------------------------
     // KELUAR
@@ -652,9 +720,7 @@ public OnDialogResponse(
 
     if (!response)
     {
-        CRP_ShowLoginUI(
-            playerid
-        );
+        CRP_ShowLoginUI(playerid);
 
         return 1;
     }
@@ -680,7 +746,7 @@ public OnDialogResponse(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Login TextDraw System v0.1");
+    print(" CRP Login TextDraw System v0.2");
     print(" Login UI Loaded");
     print(" Password Dialog Integration Loaded");
     print(" Remote Interface Connected");
