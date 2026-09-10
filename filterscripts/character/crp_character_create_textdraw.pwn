@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Creation TextDraw System v0.1
+// Character Creation TextDraw System v0.2
 //
 // Fungsi:
 // - UI Character Creation
@@ -20,11 +20,21 @@
 // CallRemoteFunction()
 // ============================================================
 
+
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREY      0xAAAAAA
-#define COLOR_GREEN     0x33AA33
-#define COLOR_RED       0xFF3333
-#define COLOR_YELLOW    0xFFFF00
+#define COLOR_GREY      0xAAAAAAFF
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_YELLOW    0xFFFF00FF
+
+
+// ============================================================
+// DIALOG
+// ============================================================
 
 #define DIALOG_CREATE_NAME       2200
 #define DIALOG_CREATE_ORIGIN     2201
@@ -33,12 +43,22 @@
 #define DIALOG_CREATE_RELIGION   2204
 #define DIALOG_CREATE_CONFIRM    2205
 
+
+// ============================================================
+// CREATE STATE
+// ============================================================
+
 #define CREATE_STATE_NAME       1
 #define CREATE_STATE_ORIGIN     2
 #define CREATE_STATE_GENDER     3
 #define CREATE_STATE_DOB        4
 #define CREATE_STATE_RELIGION   5
 #define CREATE_STATE_CONFIRM    6
+
+
+// ============================================================
+// TEXTDRAW ID
+// ============================================================
 
 #define TD_BACKGROUND       0
 #define TD_TITLE            1
@@ -54,6 +74,11 @@
 
 #define CREATE_TD_COUNT     11
 
+
+// ============================================================
+// PLAYER TEXTDRAW
+// ============================================================
+
 new PlayerText:gCreateTD[MAX_PLAYERS][CREATE_TD_COUNT];
 
 
@@ -61,8 +86,13 @@ new PlayerText:gCreateTD[MAX_PLAYERS][CREATE_TD_COUNT];
 // LOGIC REMOTE
 // ============================================================
 
-forward CRP_GetCreateStateRemote(playerid);
-forward CRP_GetCreateSlotRemote(playerid);
+forward CRP_GetCreateStateRemote(
+    playerid
+);
+
+forward CRP_GetCreateSlotRemote(
+    playerid
+);
 
 forward CRP_GetCreateNameRemote(
     playerid,
@@ -136,6 +166,10 @@ stock CRP_CreateCharacterCreateTextDraw(
     playerid
 )
 {
+    // ========================================================
+    // BACKGROUND
+    // ========================================================
+
     gCreateTD[playerid][TD_BACKGROUND] =
         CreatePlayerTextDraw(
             playerid,
@@ -676,6 +710,13 @@ stock CRP_ShowCharacterCreateUI(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
     new slot;
     new slottext[64];
 
@@ -684,6 +725,13 @@ stock CRP_ShowCharacterCreateUI(
         "d",
         playerid
     );
+
+    if (
+        slot < 0
+    )
+    {
+        return 0;
+    }
 
     format(
         slottext,
@@ -727,6 +775,13 @@ stock CRP_HideCharacterCreateUI(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
     for (
         new i = 0;
         i < CREATE_TD_COUNT;
@@ -873,6 +928,13 @@ stock CRP_ShowCreateConfirmation(
     playerid
 )
 {
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
     new name[25];
     new origin[64];
     new gender[16];
@@ -880,9 +942,23 @@ stock CRP_ShowCreateConfirmation(
     new religion[24];
     new confirm[512];
 
+    // --------------------------------------------------------
+    // IMPORTANT:
+    //
+    // Getter signature:
+    //
+    // playerid
+    // string[]
+    // size
+    //
+    // Correct CallRemoteFunction format:
+    // "dsd"
+    //
+    // --------------------------------------------------------
+
     CallRemoteFunction(
         "CRP_GetCreateNameRemote",
-        "dsi",
+        "dsd",
         playerid,
         name,
         sizeof(name)
@@ -890,7 +966,7 @@ stock CRP_ShowCreateConfirmation(
 
     CallRemoteFunction(
         "CRP_GetCreateOriginRemote",
-        "dsi",
+        "dsd",
         playerid,
         origin,
         sizeof(origin)
@@ -898,7 +974,7 @@ stock CRP_ShowCreateConfirmation(
 
     CallRemoteFunction(
         "CRP_GetCreateGenderRemote",
-        "dsi",
+        "dsd",
         playerid,
         gender,
         sizeof(gender)
@@ -906,7 +982,7 @@ stock CRP_ShowCreateConfirmation(
 
     CallRemoteFunction(
         "CRP_GetCreateDOBRemote",
-        "dsi",
+        "dsd",
         playerid,
         dob,
         sizeof(dob)
@@ -914,7 +990,7 @@ stock CRP_ShowCreateConfirmation(
 
     CallRemoteFunction(
         "CRP_GetCreateReligionRemote",
-        "dsi",
+        "dsd",
         playerid,
         religion,
         sizeof(religion)
@@ -959,12 +1035,16 @@ public CRP_ShowCharacterCreationUIRemote(
     playerid
 )
 {
-    if (!IsPlayerConnected(playerid))
+    if (
+        !IsPlayerConnected(playerid)
+    )
     {
         return 0;
     }
 
-    CRP_ShowCharacterCreateUI(playerid);
+    CRP_ShowCharacterCreateUI(
+        playerid
+    );
 
     return 1;
 }
@@ -1065,6 +1145,10 @@ public OnDialogResponse(
     inputtext[]
 )
 {
+    // ========================================================
+    // NAME
+    // ========================================================
+
     if (
         dialogid
         == DIALOG_CREATE_NAME
@@ -1098,6 +1182,10 @@ public OnDialogResponse(
         return 1;
     }
 
+
+    // ========================================================
+    // ORIGIN
+    // ========================================================
 
     if (
         dialogid
@@ -1133,6 +1221,10 @@ public OnDialogResponse(
     }
 
 
+    // ========================================================
+    // GENDER
+    // ========================================================
+
     if (
         dialogid
         == DIALOG_CREATE_GENDER
@@ -1165,6 +1257,10 @@ public OnDialogResponse(
         return 1;
     }
 
+
+    // ========================================================
+    // DOB
+    // ========================================================
 
     if (
         dialogid
@@ -1200,6 +1296,10 @@ public OnDialogResponse(
     }
 
 
+    // ========================================================
+    // RELIGION
+    // ========================================================
+
     if (
         dialogid
         == DIALOG_CREATE_RELIGION
@@ -1233,6 +1333,10 @@ public OnDialogResponse(
     }
 
 
+    // ========================================================
+    // CONFIRM
+    // ========================================================
+
     if (
         dialogid
         == DIALOG_CREATE_CONFIRM
@@ -1260,18 +1364,23 @@ public OnDialogResponse(
 
 
 // ============================================================
-// CONNECT
+// PLAYER CONNECT
 // ============================================================
 
-public OnPlayerConnect(playerid)
+public OnPlayerConnect(
+    playerid
+)
 {
-    CRP_CreateCharacterCreateTextDraw(playerid);
+    CRP_CreateCharacterCreateTextDraw(
+        playerid
+    );
+
     return 1;
 }
 
 
 // ============================================================
-// DISCONNECT
+// PLAYER DISCONNECT
 // ============================================================
 
 public OnPlayerDisconnect(
@@ -1296,16 +1405,17 @@ public OnPlayerDisconnect(
 
 
 // ============================================================
-// INIT
+// FILTERSCRIPT INIT
 // ============================================================
 
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Creation TextDraw v0.1");
+    print(" CRP Character Creation TextDraw v0.2");
     print(" Character Creation UI Loaded");
     print(" Dialog Input Integration Loaded");
     print(" Remote Logic Interface Loaded");
+    print(" Remote Getter Format Validated");
     print("---------------------------------------");
 
     return 1;
@@ -1313,7 +1423,7 @@ public OnFilterScriptInit()
 
 
 // ============================================================
-// EXIT
+// FILTERSCRIPT EXIT
 // ============================================================
 
 public OnFilterScriptExit()
