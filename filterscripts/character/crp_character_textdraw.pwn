@@ -2,7 +2,10 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character TextDraw System v0.5
+// Character TextDraw System v0.6
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Menampilkan 5 slot karakter
@@ -12,6 +15,7 @@
 // - Memilih character slot
 // - Terhubung dengan Character Slot System
 // - Menampilkan PRID / PURI character
+// - Refresh data character dari Character Slot cache
 //
 // Logic:
 // crp_character_slot.pwn
@@ -21,13 +25,31 @@
 //
 // Komunikasi antar Filterscript:
 // CallRemoteFunction()
+//
+// ============================================================
+// CHARACTER SLOT API
+// ============================================================
+//
+// Character Slot System v0.7 menyediakan:
+//
+// CRP_GetCharacterSlotData
+// CRP_GetCharacterSlotName
+// CRP_GetCharacterSlotLevel
+// CRP_GetCharacterSlotPRIDRemote
+// CRP_GetCharacterSlotLastLogin
+// CRP_SelectCharacterSlotRemote
+// CRP_GetSelectedCharacterSlotRemote
+// CRP_CharacterSlotConfirmed
+//
 // ============================================================
 
+
 #define COLOR_WHITE      0xFFFFFFFF
-#define COLOR_GREY       0xAAAAAA
-#define COLOR_GREEN      0x33AA33
-#define COLOR_YELLOW     0xFFFF00
-#define COLOR_RED        0xFF3333
+#define COLOR_GREY       0xAAAAAAFF
+#define COLOR_GREEN      0x33AA33FF
+#define COLOR_YELLOW     0xFFFF00FF
+#define COLOR_RED        0xFF3333FF
+
 
 #define CHARACTER_SLOT_COUNT 5
 
@@ -68,7 +90,7 @@ new PlayerText:gCharacterTD
 
 
 // ============================================================
-// REMOTE CHARACTER FUNCTIONS
+// CHARACTER SLOT REMOTE API
 // ============================================================
 
 forward CRP_GetCharacterSlotData(
@@ -87,10 +109,6 @@ forward CRP_GetCharacterSlotLevel(
     playerid,
     slot
 );
-
-// ------------------------------------------------------------
-// PRID REMOTE
-// ------------------------------------------------------------
 
 forward CRP_GetCharacterSlotPRIDRemote(
     playerid,
@@ -116,6 +134,15 @@ forward CRP_GetSelectedCharacterSlotRemote(
 forward CRP_CharacterSlotConfirmed(
     playerid,
     slot
+);
+
+
+// ============================================================
+// CHARACTER SELECTION SHOW REMOTE
+// ============================================================
+
+forward CRP_ShowCharacterSelectionRemote(
+    playerid
 );
 
 
@@ -280,7 +307,7 @@ stock CRP_CreateCharacterTextDraw(
 
 
     // --------------------------------------------------------
-    // CREATE 5 SLOT
+    // CREATE 5 CHARACTER SLOTS
     // --------------------------------------------------------
 
     for (
@@ -514,6 +541,7 @@ stock CRP_CreateCharacterTextDraw(
         1
     );
 
+
     return 1;
 }
 
@@ -538,10 +566,12 @@ stock CRP_ShowCharacterTextDraw(
         );
     }
 
+
     SelectTextDraw(
         playerid,
         COLOR_WHITE
     );
+
 
     return 1;
 }
@@ -567,16 +597,18 @@ stock CRP_HideCharacterTextDraw(
         );
     }
 
+
     CancelSelectTextDraw(
         playerid
     );
+
 
     return 1;
 }
 
 
 // ============================================================
-// SET SLOT TEXT
+// SET CHARACTER SLOT TEXT
 // ============================================================
 
 stock CRP_SetCharacterSlotText(
@@ -597,6 +629,7 @@ stock CRP_SetCharacterSlotText(
         return 0;
     }
 
+
     new tdid;
     new info[144];
 
@@ -608,12 +641,14 @@ stock CRP_SetCharacterSlotText(
     tdid =
         TD_SLOT_1 + slot;
 
+
     format(
         info,
         sizeof(info),
         "SLOT %d",
         slot + 1
     );
+
 
     PlayerTextDrawSetString(
         playerid,
@@ -623,10 +658,10 @@ stock CRP_SetCharacterSlotText(
 
 
     // --------------------------------------------------------
-    // SLOT CONTENT
+    // EMPTY SLOT
     // --------------------------------------------------------
 
-    if (status == 0)
+    if (!status)
     {
         format(
             info,
@@ -634,6 +669,12 @@ stock CRP_SetCharacterSlotText(
             "Buat Karakter"
         );
     }
+
+
+    // --------------------------------------------------------
+    // FILLED SLOT
+    // --------------------------------------------------------
+
     else
     {
         format(
@@ -647,12 +688,14 @@ stock CRP_SetCharacterSlotText(
         );
     }
 
+
     PlayerTextDrawSetString(
         playerid,
         gCharacterTD[playerid]
             [TD_SLOT_INFO_1 + slot],
         info
     );
+
 
     return 1;
 }
@@ -667,10 +710,17 @@ stock CRP_RefreshCharacterSlots(
 )
 {
     new status;
+
     new charactername[25];
     new lastlogin[32];
+
     new level;
     new prid;
+
+
+    // --------------------------------------------------------
+    // PROCESS 5 SLOTS
+    // --------------------------------------------------------
 
     for (
         new slot = 0;
@@ -680,20 +730,22 @@ stock CRP_RefreshCharacterSlots(
     {
         charactername[0] = EOS;
         lastlogin[0] = EOS;
+
         level = 0;
         prid = 0;
 
 
         // ----------------------------------------------------
-        // GET STATUS
+        // GET SLOT STATUS
         // ----------------------------------------------------
 
-        status = CallRemoteFunction(
-            "CRP_GetCharacterSlotData",
-            "dd",
-            playerid,
-            slot
-        );
+        status =
+            CallRemoteFunction(
+                "CRP_GetCharacterSlotData",
+                "dd",
+                playerid,
+                slot
+            );
 
 
         // ----------------------------------------------------
@@ -702,14 +754,29 @@ stock CRP_RefreshCharacterSlots(
 
         if (status)
         {
+            // ------------------------------------------------
+            // NAME
+            //
+            // Function:
+            // playerid, slot, name[], size
+            //
+            // Format:
+            // d d s d
+            // ------------------------------------------------
+
             CallRemoteFunction(
                 "CRP_GetCharacterSlotName",
-                "ddsds",
+                "ddsd",
                 playerid,
                 slot,
                 charactername,
                 sizeof(charactername)
             );
+
+
+            // ------------------------------------------------
+            // LEVEL
+            // ------------------------------------------------
 
             level =
                 CallRemoteFunction(
@@ -722,10 +789,6 @@ stock CRP_RefreshCharacterSlots(
 
             // ------------------------------------------------
             // PRID
-            //
-            // Penting:
-            // Character Slot System mengekspos fungsi
-            // remote dengan nama CRP_GetCharacterSlotPRIDRemote.
             // ------------------------------------------------
 
             prid =
@@ -737,9 +800,19 @@ stock CRP_RefreshCharacterSlots(
                 );
 
 
+            // ------------------------------------------------
+            // LAST LOGIN
+            //
+            // Function:
+            // playerid, slot, lastlogin[], size
+            //
+            // Format:
+            // d d s d
+            // ------------------------------------------------
+
             CallRemoteFunction(
                 "CRP_GetCharacterSlotLastLogin",
-                "ddsds",
+                "ddsd",
                 playerid,
                 slot,
                 lastlogin,
@@ -749,7 +822,7 @@ stock CRP_RefreshCharacterSlots(
 
 
         // ----------------------------------------------------
-        // APPLY TO TEXTDRAW
+        // UPDATE TEXTDRAW
         // ----------------------------------------------------
 
         CRP_SetCharacterSlotText(
@@ -772,22 +845,26 @@ stock CRP_RefreshCharacterSlots(
         playerid
     );
 
+
     return 1;
 }
 
 
 // ============================================================
-// SHOW CHARACTER SELECTION
-//
-// Dipanggil dari:
-// - crp_register.pwn
-// - crp_login.pwn
-// - system character lainnya
+// SHOW CHARACTER SELECTION REMOTE
 // ============================================================
-
-forward CRP_ShowCharacterSelectionRemote(
-    playerid
-);
+//
+// Dipanggil oleh sistem authentication / UCP flow.
+//
+// Contoh:
+//
+// CallRemoteFunction(
+//     "CRP_ShowCharacterSelectionRemote",
+//     "d",
+//     playerid
+// );
+//
+// ============================================================
 
 public CRP_ShowCharacterSelectionRemote(
     playerid
@@ -800,15 +877,22 @@ public CRP_ShowCharacterSelectionRemote(
         return 0;
     }
 
+
+    // --------------------------------------------------------
+    // REFRESH DATA
+    // --------------------------------------------------------
+
     CRP_RefreshCharacterSlots(
         playerid
     );
+
 
     SendClientMessage(
         playerid,
         COLOR_GREEN,
         "[CRP CHARACTER] Character Selection berhasil dibuka."
     );
+
 
     return 1;
 }
@@ -825,6 +909,7 @@ public OnPlayerConnect(
     CRP_CreateCharacterTextDraw(
         playerid
     );
+
 
     return 1;
 }
@@ -851,6 +936,7 @@ public OnPlayerDisconnect(
         );
     }
 
+
     return 1;
 }
 
@@ -865,7 +951,7 @@ public OnPlayerClickPlayerTextDraw(
 )
 {
     // --------------------------------------------------------
-    // SLOT 1 - 5
+    // CHARACTER SLOT 1 - 5
     // --------------------------------------------------------
 
     for (
@@ -881,12 +967,32 @@ public OnPlayerClickPlayerTextDraw(
                 [TD_SLOT_1 + slot]
         )
         {
-            CallRemoteFunction(
-                "CRP_SelectCharacterSlotRemote",
-                "dd",
-                playerid,
-                slot
-            );
+            // ------------------------------------------------
+            // SAVE SELECTED SLOT
+            // ------------------------------------------------
+
+            if (
+                !CallRemoteFunction(
+                    "CRP_SelectCharacterSlotRemote",
+                    "dd",
+                    playerid,
+                    slot
+                )
+            )
+            {
+                SendClientMessage(
+                    playerid,
+                    COLOR_RED,
+                    "[CRP] Slot karakter gagal dipilih."
+                );
+
+                return 1;
+            }
+
+
+            // ------------------------------------------------
+            // MESSAGE
+            // ------------------------------------------------
 
             new message[64];
 
@@ -897,11 +1003,13 @@ public OnPlayerClickPlayerTextDraw(
                 slot + 1
             );
 
+
             SendClientMessage(
                 playerid,
                 COLOR_WHITE,
                 message
             );
+
 
             return 1;
         }
@@ -909,7 +1017,7 @@ public OnPlayerClickPlayerTextDraw(
 
 
     // --------------------------------------------------------
-    // PILIH
+    // BUTTON PILIH
     // --------------------------------------------------------
 
     if (
@@ -921,6 +1029,11 @@ public OnPlayerClickPlayerTextDraw(
     {
         new selectedslot;
 
+
+        // ----------------------------------------------------
+        // GET SELECTED SLOT
+        // ----------------------------------------------------
+
         selectedslot =
             CallRemoteFunction(
                 "CRP_GetSelectedCharacterSlotRemote",
@@ -928,8 +1041,14 @@ public OnPlayerClickPlayerTextDraw(
                 playerid
             );
 
+
+        // ----------------------------------------------------
+        // NO SLOT SELECTED
+        // ----------------------------------------------------
+
         if (
-            selectedslot < 0
+            selectedslot < 0 ||
+            selectedslot >= CHARACTER_SLOT_COUNT
         )
         {
             SendClientMessage(
@@ -941,19 +1060,50 @@ public OnPlayerClickPlayerTextDraw(
             return 1;
         }
 
-        CallRemoteFunction(
-            "CRP_CharacterSlotConfirmed",
-            "dd",
-            playerid,
-            selectedslot
+
+        // ----------------------------------------------------
+        // HIDE SELECTION UI
+        //
+        // Character Slot System akan meneruskan:
+        //
+        // EMPTY  -> Character Creation
+        // FILLED -> Character Activation
+        // ----------------------------------------------------
+
+        CRP_HideCharacterTextDraw(
+            playerid
         );
+
+
+        // ----------------------------------------------------
+        // CONFIRM CHARACTER SLOT
+        // ----------------------------------------------------
+
+        if (
+            !CallRemoteFunction(
+                "CRP_CharacterSlotConfirmed",
+                "dd",
+                playerid,
+                selectedslot
+            )
+        )
+        {
+            SendClientMessage(
+                playerid,
+                COLOR_RED,
+                "[CRP CHARACTER] Character gagal diproses."
+            );
+
+            return 1;
+        }
+
 
         return 1;
     }
 
 
     // --------------------------------------------------------
-    // KELUAR
+    // BUTTON KELUAR
     // --------------------------------------------------------
 
     if (
@@ -963,16 +1113,21 @@ public OnPlayerClickPlayerTextDraw(
             [TD_BUTTON_EXIT]
     )
     {
-        CancelSelectTextDraw(
+        CRP_HideCharacterTextDraw(
             playerid
         );
 
-        Kick(
-            playerid
+
+        SendClientMessage(
+            playerid,
+            COLOR_GREY,
+            "[CRP] Character Selection ditutup."
         );
+
 
         return 1;
     }
+
 
     return 0;
 }
@@ -985,13 +1140,15 @@ public OnPlayerClickPlayerTextDraw(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character TextDraw System v0.5");
+    print(" CRP Character TextDraw System v0.6");
     print(" Character Selection UI Loaded");
-    print(" Character Slot Data Connected");
+    print(" 5 Character Slots Loaded");
+    print(" Character Slot API v0.7 Connected");
     print(" PRID / PURI Display Connected");
-    print(" PRID Remote Synchronization Fixed");
+    print(" Name / Level / Last Login Connected");
     print(" Remote Selection Interface Loaded");
     print("---------------------------------------");
+
 
     return 1;
 }
@@ -1006,6 +1163,7 @@ public OnFilterScriptExit()
     print(
         "[CRP] Character TextDraw System unloaded."
     );
+
 
     return 1;
 }
