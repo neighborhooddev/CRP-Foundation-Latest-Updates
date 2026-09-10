@@ -2,13 +2,19 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Spawn System v0.1
+// Character Spawn System v0.2
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Spawn character yang sudah aktif
 // - Mengambil data dari Character Activation
-// - Set skin character
-// - Set posisi spawn
+// - Set skin character sementara
+// - Set posisi spawn default
+// - Set interior
+// - Set virtual world
+// - Menjalankan SpawnPlayer()
 // - Menjaga Register Spawn tetap khusus character baru
 //
 // Activation:
@@ -19,7 +25,8 @@
 //
 // CATATAN:
 // Spawn location sementara menggunakan lokasi default.
-// Nanti bisa dikembangkan menjadi:
+//
+// Fondasi berikutnya dapat dikembangkan menjadi:
 // - Logout Spawn
 // - Hospital Spawn
 // - Jail Spawn
@@ -27,40 +34,52 @@
 // - Rumah
 // - Apartment
 // - Last Position
+// - Spawn Selection
 // ============================================================
 
 
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
 
 
 // ============================================================
 // DEFAULT CHARACTER SPAWN
+// ============================================================
 //
-// Sementara menggunakan lokasi aman di Los Santos.
+// Sementara menggunakan lokasi default di Los Santos.
 //
-// NANTI:
-// posisi ini akan digantikan oleh sistem:
-// Character Last Position / Logout Spawn.
+// Nanti posisi ini dapat digantikan oleh sistem:
+//
+// Character Last Position
+// Logout Spawn
+// Hospital Spawn
+// Jail Spawn
+// Job Spawn
+// House Spawn
+// Apartment Spawn
+//
 // ============================================================
 
-#define CHARACTER_SPAWN_X  1685.6346
-#define CHARACTER_SPAWN_Y -2242.5151
-#define CHARACTER_SPAWN_Z 13.5469
-#define CHARACTER_SPAWN_A 90.0
+#define CHARACTER_SPAWN_X        1685.6346
+#define CHARACTER_SPAWN_Y       -2242.5151
+#define CHARACTER_SPAWN_Z          13.5469
+#define CHARACTER_SPAWN_A          90.0
 
-#define CHARACTER_SPAWN_INTERIOR 0
-#define CHARACTER_SPAWN_WORLD    0
+#define CHARACTER_SPAWN_INTERIOR    0
+#define CHARACTER_SPAWN_WORLD       0
 
 
 // ============================================================
 // DEFAULT SKIN
+// ============================================================
 //
-// Untuk sementara skin mengikuti data default.
-// Sistem skin character akan dikembangkan nanti.
+// Untuk sementara skin menggunakan skin default.
+//
+// Sistem skin character akan dikembangkan kemudian.
+//
 // ============================================================
 
 #define CHARACTER_DEFAULT_SKIN 7
@@ -90,7 +109,40 @@ forward CRP_GetActiveCharacterPRIDRemote(
 
 
 // ============================================================
+// VALIDATE PLAYER
+// ============================================================
+
+stock CRP_IsValidSpawnPlayer(
+    playerid
+)
+{
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
 // APPLY CHARACTER SPAWN
+// ============================================================
+//
+// Fungsi ini hanya mempersiapkan spawn.
+//
+// Belum memanggil SpawnPlayer().
+//
 // ============================================================
 
 stock CRP_ApplyCharacterSpawn(
@@ -98,13 +150,24 @@ stock CRP_ApplyCharacterSpawn(
 )
 {
     new active;
+
     new name[25];
     new level;
     new prid;
 
+    // --------------------------------------------------------
+    // VALIDATE PLAYER
+    // --------------------------------------------------------
+
+    if (
+        !CRP_IsValidSpawnPlayer(playerid)
+    )
+    {
+        return 0;
+    }
 
     // --------------------------------------------------------
-    // CEK CHARACTER AKTIF
+    // CHECK CHARACTER ACTIVE
     // --------------------------------------------------------
 
     active = CallRemoteFunction(
@@ -113,7 +176,9 @@ stock CRP_ApplyCharacterSpawn(
         playerid
     );
 
-    if (!active)
+    if (
+        !active
+    )
     {
         SendClientMessage(
             playerid,
@@ -124,20 +189,47 @@ stock CRP_ApplyCharacterSpawn(
         return 0;
     }
 
-
     // --------------------------------------------------------
-    // AMBIL DATA CHARACTER AKTIF
+    // GET ACTIVE CHARACTER NAME
     // --------------------------------------------------------
 
     name[0] = EOS;
 
-    CallRemoteFunction(
-        "CRP_GetActiveCharacterNameRemote",
-        "dsd",
-        playerid,
-        name,
-        sizeof(name)
-    );
+    if (
+        !CallRemoteFunction(
+            "CRP_GetActiveCharacterNameRemote",
+            "dsd",
+            playerid,
+            name,
+            sizeof(name)
+        )
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP SPAWN] Nama character gagal dibaca."
+        );
+
+        return 0;
+    }
+
+    if (
+        name[0] == EOS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP SPAWN] Nama character tidak valid."
+        );
+
+        return 0;
+    }
+
+    // --------------------------------------------------------
+    // GET ACTIVE CHARACTER LEVEL
+    // --------------------------------------------------------
 
     level = CallRemoteFunction(
         "CRP_GetActiveCharacterLevelRemote",
@@ -145,12 +237,41 @@ stock CRP_ApplyCharacterSpawn(
         playerid
     );
 
+    if (
+        level <= 0
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP SPAWN] Level character tidak valid."
+        );
+
+        return 0;
+    }
+
+    // --------------------------------------------------------
+    // GET ACTIVE CHARACTER PRID
+    // --------------------------------------------------------
+
     prid = CallRemoteFunction(
         "CRP_GetActiveCharacterPRIDRemote",
         "d",
         playerid
     );
 
+    if (
+        prid <= 0
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "[CRP SPAWN] PRID character tidak valid."
+        );
+
+        return 0;
+    }
 
     // --------------------------------------------------------
     // SET SPAWN INFO
@@ -160,18 +281,24 @@ stock CRP_ApplyCharacterSpawn(
         playerid,
         NO_TEAM,
         CHARACTER_DEFAULT_SKIN,
+
         CHARACTER_SPAWN_X,
         CHARACTER_SPAWN_Y,
         CHARACTER_SPAWN_Z,
         CHARACTER_SPAWN_A,
-        0, 0,
-        0, 0,
-        0, 0
+
+        0,
+        0,
+
+        0,
+        0,
+
+        0,
+        0
     );
 
-
     // --------------------------------------------------------
-    // INTERIOR
+    // SET INTERIOR
     // --------------------------------------------------------
 
     SetPlayerInterior(
@@ -179,9 +306,8 @@ stock CRP_ApplyCharacterSpawn(
         CHARACTER_SPAWN_INTERIOR
     );
 
-
     // --------------------------------------------------------
-    // VIRTUAL WORLD
+    // SET VIRTUAL WORLD
     // --------------------------------------------------------
 
     SetPlayerVirtualWorld(
@@ -189,13 +315,13 @@ stock CRP_ApplyCharacterSpawn(
         CHARACTER_SPAWN_WORLD
     );
 
-
     // --------------------------------------------------------
     // LOG
     // --------------------------------------------------------
 
     printf(
-        "[CRP SPAWN] Character spawn disiapkan | PRID=%03d | Name=%s | Level=%d",
+        "[CRP SPAWN] Spawn disiapkan | PlayerID=%d | PRID=%03d | Name=%s | Level=%d",
+        playerid,
         prid,
         name,
         level
@@ -208,6 +334,16 @@ stock CRP_ApplyCharacterSpawn(
 // ============================================================
 // SPAWN ACTIVE CHARACTER
 // ============================================================
+//
+// Fungsi utama yang dipanggil oleh:
+//
+// crp_character_activation.pwn
+//
+// Remote:
+//
+// CRP_SpawnActiveCharacterRemote
+//
+// ============================================================
 
 stock CRP_SpawnActiveCharacter(
     playerid
@@ -216,11 +352,22 @@ stock CRP_SpawnActiveCharacter(
     new name[25];
     new level;
     new prid;
+
     new message[144];
 
+    // --------------------------------------------------------
+    // VALIDATE PLAYER
+    // --------------------------------------------------------
+
+    if (
+        !CRP_IsValidSpawnPlayer(playerid)
+    )
+    {
+        return 0;
+    }
 
     // --------------------------------------------------------
-    // CEK CHARACTER AKTIF
+    // CHECK CHARACTER ACTIVE
     // --------------------------------------------------------
 
     if (
@@ -240,7 +387,6 @@ stock CRP_SpawnActiveCharacter(
         return 0;
     }
 
-
     // --------------------------------------------------------
     // APPLY SPAWN
     // --------------------------------------------------------
@@ -254,9 +400,8 @@ stock CRP_SpawnActiveCharacter(
         return 0;
     }
 
-
     // --------------------------------------------------------
-    // AMBIL DATA
+    // GET CHARACTER NAME
     // --------------------------------------------------------
 
     name[0] = EOS;
@@ -269,18 +414,25 @@ stock CRP_SpawnActiveCharacter(
         sizeof(name)
     );
 
+    // --------------------------------------------------------
+    // GET CHARACTER LEVEL
+    // --------------------------------------------------------
+
     level = CallRemoteFunction(
         "CRP_GetActiveCharacterLevelRemote",
         "d",
         playerid
     );
 
+    // --------------------------------------------------------
+    // GET CHARACTER PRID
+    // --------------------------------------------------------
+
     prid = CallRemoteFunction(
         "CRP_GetActiveCharacterPRIDRemote",
         "d",
         playerid
     );
-
 
     // --------------------------------------------------------
     // INFORMATION
@@ -307,9 +459,14 @@ stock CRP_SpawnActiveCharacter(
         message
     );
 
+    SendClientMessage(
+        playerid,
+        COLOR_GREY,
+        "[CRP SPAWN] Posisi awal character telah ditentukan."
+    );
 
     // --------------------------------------------------------
-    // SPAWN
+    // SPAWN PLAYER
     // --------------------------------------------------------
 
     SpawnPlayer(
@@ -321,7 +478,7 @@ stock CRP_SpawnActiveCharacter(
 
 
 // ============================================================
-// REMOTE
+// REMOTE: SPAWN ACTIVE CHARACTER
 // ============================================================
 
 forward CRP_SpawnActiveCharacterRemote(
@@ -345,9 +502,11 @@ public CRP_SpawnActiveCharacterRemote(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Spawn System v0.1");
+    print(" CRP Character Spawn System v0.2");
     print(" Active Character Spawn Loaded");
-    print(" Activation Check Loaded");
+    print(" Activation Validation Loaded");
+    print(" Character Identity Validation Loaded");
+    print(" Spawn Configuration Loaded");
     print(" Character Spawn Integration Loaded");
     print("---------------------------------------");
 
