@@ -2,10 +2,46 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Core Gamemode v3.2
+// Core Gamemode v3.1
 //
 // Developer : Muhammad Rizal
 // Project   : Crystal Roleplay
+//
+// Fokus v3.1:
+// - Player State Access Level Foundation
+// - Player State Minimum Access Validation
+// - Player State Minimum Access Session Protection
+// - Player State Access Policy Foundation
+// - Player State Access Requirement Validation
+// - Player State Access Decision Foundation
+// - Player State Exact Access Decision
+// - Player State Minimum Access Decision
+// - Player State Access Session Decision
+// - Player State Access Decision Reason Foundation
+// - Player State Access Decision Reason Validation
+// - Player State Access Decision Consistency Foundation
+// - Player State Access Decision Result Validation
+// - Player State Access Decision Reason/Result Validation
+// - Player Context Foundation
+// - Player Context Session Binding
+// - Player Context State Binding
+// - Player Context Validation
+// - Player Context Integrity Validation
+// - Player Context Session Protection
+// - Player Context Debug Foundation
+// - Player Lifecycle Event Foundation
+// - Player Lifecycle Event Validation
+// - Player Lifecycle Event Session Binding
+// - Player Lifecycle Event Integrity Validation
+// - Player Lifecycle Event Sequence Validation
+// - Player Lifecycle Event Debug Foundation
+// - Player State Transaction Protection
+// - Player Disconnect Transaction Protection
+// - Player Runtime Transition Protection
+// - Player Runtime Transition Audit
+// - Player Runtime Transition Session Binding
+// - Player Runtime Transition Integrity Validation
+// - Player Runtime Transition Debug Foundation
 //
 // GM = Otak Utama Server
 //
@@ -16,21 +52,10 @@
 
 
 // ============================================================
-// COLOR DEFINITIONS
+// COLOR
 // ============================================================
 
-#define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_RED       0xFF0000FF
-#define COLOR_GREEN     0x00FF00FF
-#define COLOR_YELLOW    0xFFFF00FF
-#define COLOR_GREY      0xAFAFAFFF
-
-
-// ============================================================
-// CHARACTER DEFINITIONS
-// ============================================================
-
-#define MAX_PLAYER_CHARACTERS   3
+#define COLOR_WHITE 0xFFFFFFFF
 
 
 // ============================================================
@@ -105,18 +130,6 @@ new gPlayerDataSessionID[MAX_PLAYERS];
 
 
 // ============================================================
-// PLAYER CHARACTER DATA
-// ============================================================
-
-new gPlayerCharacterID[MAX_PLAYERS];
-new gPlayerCharacterName[MAX_PLAYERS][MAX_PLAYER_NAME + 1];
-new gPlayerCharacterGender[MAX_PLAYERS];
-new gPlayerCharacterSkin[MAX_PLAYERS];
-new gPlayerCharacterAge[MAX_PLAYERS];
-new bool:gPlayerCharacterDataReady[MAX_PLAYERS];
-
-
-// ============================================================
 // PLAYER SPAWN CONTEXT
 // ============================================================
 
@@ -185,13 +198,6 @@ new gPlayerContextState[MAX_PLAYERS];
 new gPlayerLastEvent[MAX_PLAYERS];
 new gPlayerEventSessionID[MAX_PLAYERS];
 new gPlayerEventCount[MAX_PLAYERS];
-
-
-// ============================================================
-// FORWARD DECLARATIONS
-// ============================================================
-
-forward bool:CRP_IsPlayerLifecycleCoreValid(playerid);
 
 
 // ============================================================
@@ -356,155 +362,6 @@ stock bool:CRP_IsPlayerName(playerid, const name[])
 
 
 // ============================================================
-// PLAYER CHARACTER MANAGEMENT (v3.2 NEW)
-// ============================================================
-
-stock CRP_ResetPlayerCharacterData(playerid)
-{
-    if (!CRP_IsPlayerValid(playerid))
-    {
-        return 0;
-    }
-
-    gPlayerCharacterID[playerid] = 0;
-    gPlayerCharacterName[playerid][0] = EOS;
-    gPlayerCharacterGender[playerid] = 0;
-    gPlayerCharacterSkin[playerid] = 0;
-    gPlayerCharacterAge[playerid] = 0;
-    gPlayerCharacterDataReady[playerid] = false;
-
-    return 1;
-}
-
-
-stock bool:CRP_IsPlayerCharacterDataReady(playerid)
-{
-    if (!CRP_IsPlayerValid(playerid))
-    {
-        return false;
-    }
-
-    return gPlayerCharacterDataReady[playerid];
-}
-
-
-stock bool:CRP_IsPlayerCharacterDataValid(playerid)
-{
-    if (!CRP_IsPlayerValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return false;
-    }
-
-    if (!gPlayerCharacterDataReady[playerid])
-    {
-        return false;
-    }
-
-    if (gPlayerCharacterID[playerid] <= 0)
-    {
-        return false;
-    }
-
-    if (gPlayerCharacterName[playerid][0] == EOS)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-
-stock bool:CRP_SetPlayerActiveCharacter(playerid, charid, const charName[], gender, skin, age)
-{
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return false;
-    }
-
-    if (charid <= 0)
-    {
-        return false;
-    }
-
-    if (charName[0] == EOS)
-    {
-        return false;
-    }
-
-    gPlayerCharacterID[playerid] = charid;
-    format(gPlayerCharacterName[playerid], MAX_PLAYER_NAME + 1, "%s", charName);
-    gPlayerCharacterGender[playerid] = gender;
-    gPlayerCharacterSkin[playerid] = skin;
-    gPlayerCharacterAge[playerid] = age;
-    gPlayerCharacterDataReady[playerid] = true;
-
-    return true;
-}
-
-
-stock CRP_GetPlayerCharacterID(playerid)
-{
-    if (!CRP_IsPlayerCharacterDataValid(playerid))
-    {
-        return 0;
-    }
-
-    return gPlayerCharacterID[playerid];
-}
-
-
-stock bool:CRP_GetPlayerCharacterName(playerid, name[], size)
-{
-    if (!CRP_IsPlayerCharacterDataValid(playerid))
-    {
-        name[0] = EOS;
-        return false;
-    }
-
-    format(name, size, "%s", gPlayerCharacterName[playerid]);
-    return true;
-}
-
-
-stock CRP_GetPlayerCharacterSkin(playerid)
-{
-    if (!CRP_IsPlayerCharacterDataValid(playerid))
-    {
-        return 0;
-    }
-
-    return gPlayerCharacterSkin[playerid];
-}
-
-
-stock CRP_DebugPlayerCharacter(playerid)
-{
-    if (!CRP_IsPlayerValid(playerid))
-    {
-        return 0;
-    }
-
-    printf(
-        "[CRP] Character Data | Player: %d | CharID: %d | CharName: %s | Gender: %d | Skin: %d | Age: %d | Ready: %d",
-        playerid,
-        gPlayerCharacterID[playerid],
-        gPlayerCharacterName[playerid],
-        gPlayerCharacterGender[playerid],
-        gPlayerCharacterSkin[playerid],
-        gPlayerCharacterAge[playerid],
-        gPlayerCharacterDataReady[playerid]
-    );
-
-    return 1;
-}
-
-
-// ============================================================
 // PLAYER SESSION
 // ============================================================
 
@@ -530,7 +387,9 @@ stock CRP_StartPlayerSession(playerid)
         gCRPSessionCounter = 1;
     }
 
-    gPlayerSessionID[playerid] = gCRPSessionCounter;
+    gPlayerSessionID[playerid] =
+        gCRPSessionCounter;
+
     gPlayerSession[playerid] = true;
 
     return 1;
@@ -812,7 +671,9 @@ stock CRP_GetPlayerRuntimeTransitionSessionID(playerid)
 }
 
 
-stock bool:CRP_CanRecordPlayerRuntimeTransition(playerid)
+stock bool:CRP_CanRecordPlayerRuntimeTransition(
+    playerid
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -834,7 +695,8 @@ stock bool:CRP_CanRecordPlayerRuntimeTransition(playerid)
         return false;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     if (sessionID <= 0)
     {
@@ -853,31 +715,41 @@ stock bool:CRP_CanRecordPlayerRuntimeTransition(playerid)
 }
 
 
-stock bool:CRP_RecordPlayerRuntimeTransition(playerid)
+stock bool:CRP_RecordPlayerRuntimeTransition(
+    playerid
+)
 {
     if (!CRP_CanRecordPlayerRuntimeTransition(playerid))
     {
         return false;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     gPlayerRuntimeTransitionCount[playerid]++;
-    gPlayerRuntimeTransitionSessionID[playerid] = sessionID;
+
+    gPlayerRuntimeTransitionSessionID[playerid] =
+        sessionID;
 
     return true;
 }
 
 
-stock bool:CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid)
+stock bool:CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+    playerid
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    new transitionCount = gPlayerRuntimeTransitionCount[playerid];
-    new transitionSessionID = gPlayerRuntimeTransitionSessionID[playerid];
+    new transitionCount =
+        gPlayerRuntimeTransitionCount[playerid];
+
+    new transitionSessionID =
+        gPlayerRuntimeTransitionSessionID[playerid];
 
     if (transitionCount == 0)
     {
@@ -909,7 +781,10 @@ stock bool:CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid)
         return false;
     }
 
-    if (transitionSessionID != gPlayerSessionID[playerid])
+    if (
+        transitionSessionID !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -922,14 +797,20 @@ stock bool:CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid)
 // PLAYER SAFE RUNTIME SETTERS
 // ============================================================
 
-stock bool:CRP_SetPlayerSpawnedSafe(playerid, bool:spawned)
+stock bool:CRP_SetPlayerSpawnedSafe(
+    playerid,
+    bool:spawned
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    if (!CRP_CanSetPlayerSpawned(playerid, spawned))
+    if (!CRP_CanSetPlayerSpawned(
+        playerid,
+        spawned
+    ))
     {
         return false;
     }
@@ -955,14 +836,20 @@ stock bool:CRP_SetPlayerSpawnedSafe(playerid, bool:spawned)
 }
 
 
-stock bool:CRP_SetPlayerDeadSafe(playerid, bool:dead)
+stock bool:CRP_SetPlayerDeadSafe(
+    playerid,
+    bool:dead
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    if (!CRP_CanSetPlayerDead(playerid, dead))
+    if (!CRP_CanSetPlayerDead(
+        playerid,
+        dead
+    ))
     {
         return false;
     }
@@ -1007,7 +894,8 @@ stock bool:CRP_InitPlayerData(playerid)
     gPlayerDataReady[playerid] = false;
     gPlayerDataSessionID[playerid] = 0;
 
-    gPlayerDataSessionID[playerid] = CRP_GetPlayerSessionID(playerid);
+    gPlayerDataSessionID[playerid] =
+        CRP_GetPlayerSessionID(playerid);
 
     if (gPlayerDataSessionID[playerid] <= 0)
     {
@@ -1088,7 +976,10 @@ stock bool:CRP_IsPlayerDataValid(playerid)
         return false;
     }
 
-    if (gPlayerDataSessionID[playerid] != gPlayerSessionID[playerid])
+    if (
+        gPlayerDataSessionID[playerid] !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -1097,7 +988,10 @@ stock bool:CRP_IsPlayerDataValid(playerid)
 }
 
 
-stock bool:CRP_IsValidPlayerDataSession(playerid, sessionID)
+stock bool:CRP_IsValidPlayerDataSession(
+    playerid,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -1114,7 +1008,10 @@ stock bool:CRP_IsValidPlayerDataSession(playerid, sessionID)
         return false;
     }
 
-    if (gPlayerDataSessionID[playerid] != sessionID)
+    if (
+        gPlayerDataSessionID[playerid] !=
+        sessionID
+    )
     {
         return false;
     }
@@ -1147,7 +1044,10 @@ stock bool:CRP_IsPlayerDataIntegrityValid(playerid)
             return false;
         }
 
-        if (gPlayerDataSessionID[playerid] != gPlayerSessionID[playerid])
+        if (
+            gPlayerDataSessionID[playerid] !=
+            gPlayerSessionID[playerid]
+        )
         {
             return false;
         }
@@ -1182,20 +1082,43 @@ stock bool:CRP_IsValidPlayerSpawnType(spawnType)
 }
 
 
-stock CRP_GetPlayerSpawnTypeName(spawnType, name[], size)
+stock CRP_GetPlayerSpawnTypeName(
+    spawnType,
+    name[],
+    size
+)
 {
     switch (spawnType)
     {
-        case CRP_SPAWN_TYPE_NONE:       format(name, size, "NONE");
-        case CRP_SPAWN_TYPE_DEFAULT:    format(name, size, "DEFAULT");
-        case CRP_SPAWN_TYPE_CHARACTER:  format(name, size, "CHARACTER");
-        case CRP_SPAWN_TYPE_REGISTER:   format(name, size, "REGISTER");
-        case CRP_SPAWN_TYPE_LOGOUT:     format(name, size, "LOGOUT");
-        case CRP_SPAWN_TYPE_JAIL:       format(name, size, "JAIL");
-        case CRP_SPAWN_TYPE_HOSPITAL:   format(name, size, "HOSPITAL");
-        case CRP_SPAWN_TYPE_JOB:        format(name, size, "JOB");
-        case CRP_SPAWN_TYPE_EVENT:      format(name, size, "EVENT");
-        default:                        format(name, size, "UNKNOWN");
+        case CRP_SPAWN_TYPE_NONE:
+            format(name, size, "NONE");
+
+        case CRP_SPAWN_TYPE_DEFAULT:
+            format(name, size, "DEFAULT");
+
+        case CRP_SPAWN_TYPE_CHARACTER:
+            format(name, size, "CHARACTER");
+
+        case CRP_SPAWN_TYPE_REGISTER:
+            format(name, size, "REGISTER");
+
+        case CRP_SPAWN_TYPE_LOGOUT:
+            format(name, size, "LOGOUT");
+
+        case CRP_SPAWN_TYPE_JAIL:
+            format(name, size, "JAIL");
+
+        case CRP_SPAWN_TYPE_HOSPITAL:
+            format(name, size, "HOSPITAL");
+
+        case CRP_SPAWN_TYPE_JOB:
+            format(name, size, "JOB");
+
+        case CRP_SPAWN_TYPE_EVENT:
+            format(name, size, "EVENT");
+
+        default:
+            format(name, size, "UNKNOWN");
     }
 
     return 1;
@@ -1206,17 +1129,34 @@ stock CRP_GetPlayerSpawnTypeName(spawnType, name[], size)
 // PLAYER STATE NAME
 // ============================================================
 
-stock CRP_GetPlayerStateName(state, name[], size)
+stock CRP_GetPlayerStateName(
+    state,
+    name[],
+    size
+)
 {
     switch (state)
     {
-        case CRP_PLAYER_STATE_NONE:           format(name, size, "NONE");
-        case CRP_PLAYER_STATE_CONNECTED:      format(name, size, "CONNECTED");
-        case CRP_PLAYER_STATE_AUTHENTICATING: format(name, size, "AUTHENTICATING");
-        case CRP_PLAYER_STATE_AUTHENTICATED:  format(name, size, "AUTHENTICATED");
-        case CRP_PLAYER_STATE_CHARACTER:      format(name, size, "CHARACTER");
-        case CRP_PLAYER_STATE_ACTIVE:         format(name, size, "ACTIVE");
-        default:                              format(name, size, "UNKNOWN");
+        case CRP_PLAYER_STATE_NONE:
+            format(name, size, "NONE");
+
+        case CRP_PLAYER_STATE_CONNECTED:
+            format(name, size, "CONNECTED");
+
+        case CRP_PLAYER_STATE_AUTHENTICATING:
+            format(name, size, "AUTHENTICATING");
+
+        case CRP_PLAYER_STATE_AUTHENTICATED:
+            format(name, size, "AUTHENTICATED");
+
+        case CRP_PLAYER_STATE_CHARACTER:
+            format(name, size, "CHARACTER");
+
+        case CRP_PLAYER_STATE_ACTIVE:
+            format(name, size, "ACTIVE");
+
+        default:
+            format(name, size, "UNKNOWN");
     }
 
     return 1;
@@ -1227,39 +1167,60 @@ stock CRP_GetPlayerStateName(state, name[], size)
 // PLAYER STATE TRANSITION
 // ============================================================
 
-stock bool:CRP_IsValidStateTransition(currentState, newState)
+stock bool:CRP_IsValidStateTransition(
+    currentState,
+    newState
+)
 {
     if (currentState == newState)
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_NONE && newState == CRP_PLAYER_STATE_CONNECTED)
+    if (
+        currentState == CRP_PLAYER_STATE_NONE &&
+        newState == CRP_PLAYER_STATE_CONNECTED
+    )
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_CONNECTED && newState == CRP_PLAYER_STATE_AUTHENTICATING)
+    if (
+        currentState == CRP_PLAYER_STATE_CONNECTED &&
+        newState == CRP_PLAYER_STATE_AUTHENTICATING
+    )
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_AUTHENTICATING && newState == CRP_PLAYER_STATE_AUTHENTICATED)
+    if (
+        currentState == CRP_PLAYER_STATE_AUTHENTICATING &&
+        newState == CRP_PLAYER_STATE_AUTHENTICATED
+    )
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_AUTHENTICATED && newState == CRP_PLAYER_STATE_CHARACTER)
+    if (
+        currentState == CRP_PLAYER_STATE_AUTHENTICATED &&
+        newState == CRP_PLAYER_STATE_CHARACTER
+    )
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_CHARACTER && newState == CRP_PLAYER_STATE_ACTIVE)
+    if (
+        currentState == CRP_PLAYER_STATE_CHARACTER &&
+        newState == CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return true;
     }
 
-    if (currentState == CRP_PLAYER_STATE_ACTIVE && newState == CRP_PLAYER_STATE_CHARACTER)
+    if (
+        currentState == CRP_PLAYER_STATE_ACTIVE &&
+        newState == CRP_PLAYER_STATE_CHARACTER
+    )
     {
         return true;
     }
@@ -1286,7 +1247,10 @@ stock bool:CRP_IsPlayerStateIntegrityValid(playerid)
         return true;
     }
 
-    if (state < CRP_PLAYER_STATE_NONE || state > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        state < CRP_PLAYER_STATE_NONE ||
+        state > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -1314,7 +1278,10 @@ stock bool:CRP_IsPlayerStateIntegrityValid(playerid)
 // PLAYER STATE HISTORY TRANSITION VALIDATION
 // ============================================================
 
-stock bool:CRP_CanUpdatePlayerStateHistory(playerid, newState)
+stock bool:CRP_CanUpdatePlayerStateHistory(
+    playerid,
+    newState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -1366,12 +1333,18 @@ stock bool:CRP_CanUpdatePlayerStateHistory(playerid, newState)
         return false;
     }
 
-    if (!CRP_IsValidStateTransition(previousState, currentState))
+    if (!CRP_IsValidStateTransition(
+        previousState,
+        currentState
+    ))
     {
         return false;
     }
 
-    if (!CRP_IsValidStateTransition(currentState, newState))
+    if (!CRP_IsValidStateTransition(
+        currentState,
+        newState
+    ))
     {
         return false;
     }
@@ -1395,12 +1368,18 @@ stock bool:CRP_IsPlayerStateHistoryIntegrityValid(playerid)
     new previousState = gPlayerPreviousState[playerid];
     new historySessionID = gPlayerStateSessionID[playerid];
 
-    if (currentState < CRP_PLAYER_STATE_NONE || currentState > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        currentState < CRP_PLAYER_STATE_NONE ||
+        currentState > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
 
-    if (previousState < CRP_PLAYER_STATE_NONE || previousState > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        previousState < CRP_PLAYER_STATE_NONE ||
+        previousState > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -1435,7 +1414,10 @@ stock bool:CRP_IsPlayerStateHistoryIntegrityValid(playerid)
         return false;
     }
 
-    if (historySessionID != gPlayerSessionID[playerid])
+    if (
+        historySessionID !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -1460,7 +1442,10 @@ stock bool:CRP_IsPlayerStateHistoryIntegrityValid(playerid)
         return false;
     }
 
-    if (!CRP_IsValidStateTransition(previousState, currentState))
+    if (!CRP_IsValidStateTransition(
+        previousState,
+        currentState
+    ))
     {
         return false;
     }
@@ -1498,7 +1483,9 @@ stock CRP_ResetPlayerStateHistory(playerid)
         return 0;
     }
 
-    gPlayerPreviousState[playerid] = CRP_PLAYER_STATE_NONE;
+    gPlayerPreviousState[playerid] =
+        CRP_PLAYER_STATE_NONE;
+
     gPlayerStateSessionID[playerid] = 0;
 
     return 1;
@@ -1553,8 +1540,11 @@ stock bool:CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid)
     }
 
     new currentState = gPlayerState[playerid];
-    new transitionCount = gPlayerStateTransitionCount[playerid];
-    new transitionSessionID = gPlayerStateTransitionSessionID[playerid];
+    new transitionCount =
+        gPlayerStateTransitionCount[playerid];
+
+    new transitionSessionID =
+        gPlayerStateTransitionSessionID[playerid];
 
     if (currentState == CRP_PLAYER_STATE_NONE)
     {
@@ -1591,7 +1581,10 @@ stock bool:CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid)
         return false;
     }
 
-    if (transitionSessionID != gPlayerSessionID[playerid])
+    if (
+        transitionSessionID !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -1604,7 +1597,10 @@ stock bool:CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid)
 // PLAYER STATE ENTRY VALIDATION
 // ============================================================
 
-stock bool:CRP_CanEnterPlayerState(playerid, newState)
+stock bool:CRP_CanEnterPlayerState(
+    playerid,
+    newState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -1640,7 +1636,10 @@ stock bool:CRP_CanEnterPlayerState(playerid, newState)
 
         case CRP_PLAYER_STATE_AUTHENTICATING:
         {
-            if (gPlayerState[playerid] != CRP_PLAYER_STATE_CONNECTED)
+            if (
+                gPlayerState[playerid] !=
+                CRP_PLAYER_STATE_CONNECTED
+            )
             {
                 return false;
             }
@@ -1650,7 +1649,10 @@ stock bool:CRP_CanEnterPlayerState(playerid, newState)
 
         case CRP_PLAYER_STATE_AUTHENTICATED:
         {
-            if (gPlayerState[playerid] != CRP_PLAYER_STATE_AUTHENTICATING)
+            if (
+                gPlayerState[playerid] !=
+                CRP_PLAYER_STATE_AUTHENTICATING
+            )
             {
                 return false;
             }
@@ -1660,7 +1662,10 @@ stock bool:CRP_CanEnterPlayerState(playerid, newState)
 
         case CRP_PLAYER_STATE_CHARACTER:
         {
-            if (gPlayerState[playerid] != CRP_PLAYER_STATE_AUTHENTICATED)
+            if (
+                gPlayerState[playerid] !=
+                CRP_PLAYER_STATE_AUTHENTICATED
+            )
             {
                 return false;
             }
@@ -1670,7 +1675,10 @@ stock bool:CRP_CanEnterPlayerState(playerid, newState)
 
         case CRP_PLAYER_STATE_ACTIVE:
         {
-            if (gPlayerState[playerid] != CRP_PLAYER_STATE_CHARACTER)
+            if (
+                gPlayerState[playerid] !=
+                CRP_PLAYER_STATE_CHARACTER
+            )
             {
                 return false;
             }
@@ -1684,86 +1692,15 @@ stock bool:CRP_CanEnterPlayerState(playerid, newState)
 
 
 // ============================================================
-// PLAYER LIFECYCLE CORE VALIDATION (v3.2 REVISED)
-// ============================================================
-
-stock bool:CRP_IsPlayerLifecycleCoreValid(playerid)
-{
-    if (!CRP_IsPlayerValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return false;
-    }
-
-    if (!gPlayerIdentityReady[playerid])
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerSessionIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerDataIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerDataValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerStateIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerStateHistoryIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerRuntimeIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    if (!CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
-    {
-        return false;
-    }
-
-    // Checking Character Data Consistency for Active State (v3.2)
-    if (gPlayerState[playerid] == CRP_PLAYER_STATE_ACTIVE)
-    {
-        if (!CRP_IsPlayerCharacterDataValid(playerid))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
-// ============================================================
 // PLAYER CONTEXT
 // ============================================================
 
 stock bool:CRP_IsValidPlayerContextState(state)
 {
-    if (state < CRP_PLAYER_CONTEXT_NONE || state > CRP_PLAYER_CONTEXT_ACTIVE)
+    if (
+        state < CRP_PLAYER_CONTEXT_NONE ||
+        state > CRP_PLAYER_CONTEXT_ACTIVE
+    )
     {
         return false;
     }
@@ -1779,7 +1716,8 @@ stock bool:CRP_IsPlayerContextIntegrityValid(playerid)
         return false;
     }
 
-    new contextState = gPlayerContextState[playerid];
+    new contextState =
+        gPlayerContextState[playerid];
 
     if (!CRP_IsValidPlayerContextState(contextState))
     {
@@ -1816,7 +1754,10 @@ stock bool:CRP_IsPlayerContextIntegrityValid(playerid)
         return false;
     }
 
-    if (gPlayerContextSessionID[playerid] != gPlayerSessionID[playerid])
+    if (
+        gPlayerContextSessionID[playerid] !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -1852,12 +1793,18 @@ stock bool:CRP_IsPlayerContextValid(playerid)
         return false;
     }
 
-    if (gPlayerContextSessionID[playerid] != gPlayerSessionID[playerid])
+    if (
+        gPlayerContextSessionID[playerid] !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
 
-    if (gPlayerContextState[playerid] != gPlayerState[playerid])
+    if (
+        gPlayerContextState[playerid] !=
+        gPlayerState[playerid]
+    )
     {
         return false;
     }
@@ -1880,24 +1827,34 @@ stock bool:CRP_InitPlayerContext(playerid)
 
     gPlayerContextReady[playerid] = false;
     gPlayerContextSessionID[playerid] = 0;
-    gPlayerContextState[playerid] = CRP_PLAYER_CONTEXT_NONE;
+    gPlayerContextState[playerid] =
+        CRP_PLAYER_CONTEXT_NONE;
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     if (sessionID <= 0)
     {
         return false;
     }
 
-    new state = gPlayerState[playerid];
+    new state =
+        gPlayerState[playerid];
 
-    if (state < CRP_PLAYER_STATE_CONNECTED || state > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        state < CRP_PLAYER_STATE_CONNECTED ||
+        state > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
 
-    gPlayerContextSessionID[playerid] = sessionID;
-    gPlayerContextState[playerid] = state;
+    gPlayerContextSessionID[playerid] =
+        sessionID;
+
+    gPlayerContextState[playerid] =
+        state;
+
     gPlayerContextReady[playerid] = true;
 
     return true;
@@ -1913,13 +1870,17 @@ stock CRP_ResetPlayerContext(playerid)
 
     gPlayerContextReady[playerid] = false;
     gPlayerContextSessionID[playerid] = 0;
-    gPlayerContextState[playerid] = CRP_PLAYER_CONTEXT_NONE;
+    gPlayerContextState[playerid] =
+        CRP_PLAYER_CONTEXT_NONE;
 
     return 1;
 }
 
 
-stock bool:CRP_IsValidPlayerContextSession(playerid, sessionID)
+stock bool:CRP_IsValidPlayerContextSession(
+    playerid,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -1936,7 +1897,10 @@ stock bool:CRP_IsValidPlayerContextSession(playerid, sessionID)
         return false;
     }
 
-    if (gPlayerContextSessionID[playerid] != sessionID)
+    if (
+        gPlayerContextSessionID[playerid] !=
+        sessionID
+    )
     {
         return false;
     }
@@ -1945,14 +1909,20 @@ stock bool:CRP_IsValidPlayerContextSession(playerid, sessionID)
 }
 
 
-stock bool:CRP_IsPlayerContextStateValid(playerid, requiredState)
+stock bool:CRP_IsPlayerContextStateValid(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    if (requiredState < CRP_PLAYER_STATE_CONNECTED || requiredState > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        requiredState < CRP_PLAYER_STATE_CONNECTED ||
+        requiredState > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -1962,7 +1932,10 @@ stock bool:CRP_IsPlayerContextStateValid(playerid, requiredState)
         return false;
     }
 
-    if (gPlayerContextState[playerid] != requiredState)
+    if (
+        gPlayerContextState[playerid] !=
+        requiredState
+    )
     {
         return false;
     }
@@ -1975,7 +1948,10 @@ stock bool:CRP_IsPlayerContextStateValid(playerid, requiredState)
 // PLAYER CONTEXT STATE TRANSACTION VALIDATION
 // ============================================================
 
-stock bool:CRP_CanUpdatePlayerContextState(playerid, newState)
+stock bool:CRP_CanUpdatePlayerContextState(
+    playerid,
+    newState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -1997,7 +1973,10 @@ stock bool:CRP_CanUpdatePlayerContextState(playerid, newState)
         return false;
     }
 
-    if (gPlayerContextSessionID[playerid] != gPlayerSessionID[playerid])
+    if (
+        gPlayerContextSessionID[playerid] !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -2006,9 +1985,15 @@ stock bool:CRP_CanUpdatePlayerContextState(playerid, newState)
 }
 
 
-stock bool:CRP_UpdatePlayerContextState(playerid, newState)
+stock bool:CRP_UpdatePlayerContextState(
+    playerid,
+    newState
+)
 {
-    if (!CRP_CanUpdatePlayerContextState(playerid, newState))
+    if (!CRP_CanUpdatePlayerContextState(
+        playerid,
+        newState
+    ))
     {
         return false;
     }
@@ -2018,7 +2003,8 @@ stock bool:CRP_UpdatePlayerContextState(playerid, newState)
         return true;
     }
 
-    gPlayerContextState[playerid] = newState;
+    gPlayerContextState[playerid] =
+        newState;
 
     return true;
 }
@@ -2052,11 +2038,15 @@ stock CRP_DebugPlayerContext(playerid)
 
     if (CRP_IsPlayerContextValid(playerid))
     {
-        printf("[CRP] Player Context | Status: VALID");
+        printf(
+            "[CRP] Player Context | Status: VALID"
+        );
     }
     else
     {
-        printf("[CRP] Player Context | Status: INVALID");
+        printf(
+            "[CRP] Player Context | Status: INVALID"
+        );
     }
 
     return 1;
@@ -2069,7 +2059,10 @@ stock CRP_DebugPlayerContext(playerid)
 
 stock bool:CRP_IsValidPlayerEvent(eventType)
 {
-    if (eventType < CRP_PLAYER_EVENT_NONE || eventType > CRP_PLAYER_EVENT_DISCONNECT)
+    if (
+        eventType < CRP_PLAYER_EVENT_NONE ||
+        eventType > CRP_PLAYER_EVENT_DISCONNECT
+    )
     {
         return false;
     }
@@ -2078,16 +2071,31 @@ stock bool:CRP_IsValidPlayerEvent(eventType)
 }
 
 
-stock CRP_GetPlayerEventName(eventType, name[], size)
+stock CRP_GetPlayerEventName(
+    eventType,
+    name[],
+    size
+)
 {
     switch (eventType)
     {
-        case CRP_PLAYER_EVENT_NONE:       format(name, size, "NONE");
-        case CRP_PLAYER_EVENT_CONNECT:    format(name, size, "CONNECT");
-        case CRP_PLAYER_EVENT_SPAWN:      format(name, size, "SPAWN");
-        case CRP_PLAYER_EVENT_DEATH:      format(name, size, "DEATH");
-        case CRP_PLAYER_EVENT_DISCONNECT: format(name, size, "DISCONNECT");
-        default:                          format(name, size, "UNKNOWN");
+        case CRP_PLAYER_EVENT_NONE:
+            format(name, size, "NONE");
+
+        case CRP_PLAYER_EVENT_CONNECT:
+            format(name, size, "CONNECT");
+
+        case CRP_PLAYER_EVENT_SPAWN:
+            format(name, size, "SPAWN");
+
+        case CRP_PLAYER_EVENT_DEATH:
+            format(name, size, "DEATH");
+
+        case CRP_PLAYER_EVENT_DISCONNECT:
+            format(name, size, "DISCONNECT");
+
+        default:
+            format(name, size, "UNKNOWN");
     }
 
     return 1;
@@ -2101,7 +2109,9 @@ stock CRP_ResetPlayerEvent(playerid)
         return 0;
     }
 
-    gPlayerLastEvent[playerid] = CRP_PLAYER_EVENT_NONE;
+    gPlayerLastEvent[playerid] =
+        CRP_PLAYER_EVENT_NONE;
+
     gPlayerEventSessionID[playerid] = 0;
     gPlayerEventCount[playerid] = 0;
 
@@ -2109,16 +2119,23 @@ stock CRP_ResetPlayerEvent(playerid)
 }
 
 
-stock bool:CRP_IsPlayerLifecycleEventIntegrityValid(playerid)
+stock bool:CRP_IsPlayerLifecycleEventIntegrityValid(
+    playerid
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    new lastEvent = gPlayerLastEvent[playerid];
-    new eventSessionID = gPlayerEventSessionID[playerid];
-    new eventCount = gPlayerEventCount[playerid];
+    new lastEvent =
+        gPlayerLastEvent[playerid];
+
+    new eventSessionID =
+        gPlayerEventSessionID[playerid];
+
+    new eventCount =
+        gPlayerEventCount[playerid];
 
     if (!CRP_IsValidPlayerEvent(lastEvent))
     {
@@ -2150,7 +2167,10 @@ stock bool:CRP_IsPlayerLifecycleEventIntegrityValid(playerid)
         return false;
     }
 
-    if (eventSessionID != gPlayerSessionID[playerid])
+    if (
+        eventSessionID !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -2168,7 +2188,10 @@ stock bool:CRP_IsPlayerLifecycleEventIntegrityValid(playerid)
 // NORMAL PLAYER EVENT VALIDATION
 // ============================================================
 
-stock bool:CRP_CanHandlePlayerEvent(playerid, eventType)
+stock bool:CRP_CanHandlePlayerEvent(
+    playerid,
+    eventType
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -2190,7 +2213,8 @@ stock bool:CRP_CanHandlePlayerEvent(playerid, eventType)
         return false;
     }
 
-    new lastEvent = gPlayerLastEvent[playerid];
+    new lastEvent =
+        gPlayerLastEvent[playerid];
 
     if (eventType == CRP_PLAYER_EVENT_CONNECT)
     {
@@ -2256,7 +2280,8 @@ stock bool:CRP_CanHandlePlayerDisconnectEvent(playerid)
         return false;
     }
 
-    new lastEvent = gPlayerLastEvent[playerid];
+    new lastEvent =
+        gPlayerLastEvent[playerid];
 
     if (
         lastEvent != CRP_PLAYER_EVENT_CONNECT &&
@@ -2288,17 +2313,25 @@ stock bool:CRP_RecordPlayerDisconnectEvent(playerid)
         return false;
     }
 
-    new sessionID = gPlayerSessionID[playerid];
+    new sessionID =
+        gPlayerSessionID[playerid];
 
-    gPlayerLastEvent[playerid] = CRP_PLAYER_EVENT_DISCONNECT;
-    gPlayerEventSessionID[playerid] = sessionID;
+    gPlayerLastEvent[playerid] =
+        CRP_PLAYER_EVENT_DISCONNECT;
+
+    gPlayerEventSessionID[playerid] =
+        sessionID;
+
     gPlayerEventCount[playerid]++;
 
     return true;
 }
 
 
-stock CRP_RecordPlayerEvent(playerid, eventType)
+stock CRP_RecordPlayerEvent(
+    playerid,
+    eventType
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -2310,20 +2343,28 @@ stock CRP_RecordPlayerEvent(playerid, eventType)
         return CRP_RecordPlayerDisconnectEvent(playerid);
     }
 
-    if (!CRP_CanHandlePlayerEvent(playerid, eventType))
+    if (!CRP_CanHandlePlayerEvent(
+        playerid,
+        eventType
+    ))
     {
         return 0;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     if (sessionID <= 0)
     {
         return 0;
     }
 
-    gPlayerLastEvent[playerid] = eventType;
-    gPlayerEventSessionID[playerid] = sessionID;
+    gPlayerLastEvent[playerid] =
+        eventType;
+
+    gPlayerEventSessionID[playerid] =
+        sessionID;
+
     gPlayerEventCount[playerid]++;
 
     return 1;
@@ -2334,7 +2375,7 @@ stock CRP_GetPlayerLastEvent(playerid)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
-        return CRP_PLAYER_STATE_NONE;
+        return CRP_PLAYER_EVENT_NONE;
     }
 
     return gPlayerLastEvent[playerid];
@@ -2363,7 +2404,10 @@ stock CRP_GetPlayerEventCount(playerid)
 }
 
 
-stock bool:CRP_IsPlayerEventSessionValid(playerid, sessionID)
+stock bool:CRP_IsPlayerEventSessionValid(
+    playerid,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -2380,12 +2424,18 @@ stock bool:CRP_IsPlayerEventSessionValid(playerid, sessionID)
         return false;
     }
 
-    if (gPlayerEventSessionID[playerid] != sessionID)
+    if (
+        gPlayerEventSessionID[playerid] !=
+        sessionID
+    )
     {
         return false;
     }
 
-    if (gPlayerEventSessionID[playerid] != gPlayerSessionID[playerid])
+    if (
+        gPlayerEventSessionID[playerid] !=
+        gPlayerSessionID[playerid]
+    )
     {
         return false;
     }
@@ -2419,13 +2469,21 @@ stock CRP_DebugPlayerEvent(playerid)
         gPlayerEventSessionID[playerid]
     );
 
-    if (CRP_IsPlayerLifecycleEventIntegrityValid(playerid))
+    if (
+        CRP_IsPlayerLifecycleEventIntegrityValid(
+            playerid
+        )
+    )
     {
-        printf("[CRP] Lifecycle Event | Status: VALID");
+        printf(
+            "[CRP] Lifecycle Event | Status: VALID"
+        );
     }
     else
     {
-        printf("[CRP] Lifecycle Event | Status: INVALID");
+        printf(
+            "[CRP] Lifecycle Event | Status: INVALID"
+        );
     }
 
     return 1;
@@ -2436,63 +2494,91 @@ stock CRP_DebugPlayerEvent(playerid)
 // PLAYER STATE FUNCTIONS
 // ============================================================
 
-stock bool:CRP_SetPlayerState(playerid, newState)
+stock bool:CRP_SetPlayerState(
+    playerid,
+    newState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    new currentState = gPlayerState[playerid];
+    new currentState =
+        gPlayerState[playerid];
 
     if (currentState == newState)
     {
         return true;
     }
 
-    if (!CRP_IsValidStateTransition(currentState, newState))
+    if (!CRP_IsValidStateTransition(
+        currentState,
+        newState
+    ))
     {
         return false;
     }
 
-    if (!CRP_CanEnterPlayerState(playerid, newState))
+    if (!CRP_CanEnterPlayerState(
+        playerid,
+        newState
+    ))
     {
         return false;
     }
 
-    if (!CRP_CanUpdatePlayerStateHistory(playerid, newState))
+    if (!CRP_CanUpdatePlayerStateHistory(
+        playerid,
+        newState
+    ))
     {
         return false;
     }
 
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (!CRP_CanUpdatePlayerContextState(playerid, newState))
+    if (!CRP_CanUpdatePlayerContextState(
+        playerid,
+        newState
+    ))
     {
         return false;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     if (sessionID <= 0)
     {
         return false;
     }
 
-    gPlayerPreviousState[playerid] = currentState;
-    gPlayerStateSessionID[playerid] = sessionID;
+    gPlayerPreviousState[playerid] =
+        currentState;
+
+    gPlayerStateSessionID[playerid] =
+        sessionID;
 
     gPlayerStateTransitionCount[playerid]++;
-    gPlayerStateTransitionSessionID[playerid] = sessionID;
 
-    gPlayerState[playerid] = newState;
+    gPlayerStateTransitionSessionID[playerid] =
+        sessionID;
+
+    gPlayerState[playerid] =
+        newState;
 
     if (gPlayerContextReady[playerid])
     {
-        gPlayerContextState[playerid] = newState;
+        gPlayerContextState[playerid] =
+            newState;
     }
 
     return true;
@@ -2517,9 +2603,83 @@ stock CRP_ResetPlayerState(playerid)
         return 0;
     }
 
-    gPlayerState[playerid] = CRP_PLAYER_STATE_NONE;
+    gPlayerState[playerid] =
+        CRP_PLAYER_STATE_NONE;
 
     return 1;
+}
+
+
+// ============================================================
+// PLAYER LIFECYCLE CORE VALIDATION
+// ============================================================
+
+stock bool:CRP_IsPlayerLifecycleCoreValid(playerid)
+{
+    if (!CRP_IsPlayerValid(playerid))
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerConnected(playerid))
+    {
+        return false;
+    }
+
+    if (!gPlayerIdentityReady[playerid])
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerSessionIntegrityValid(playerid))
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerDataIntegrityValid(playerid))
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerDataValid(playerid))
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerStateIntegrityValid(playerid))
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerStateHistoryIntegrityValid(playerid))
+    {
+        return false;
+    }
+
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
+    {
+        return false;
+    }
+
+    if (!CRP_IsPlayerRuntimeIntegrityValid(playerid))
+    {
+        return false;
+    }
+
+    if (
+        !CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
+    {
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -2527,7 +2687,10 @@ stock CRP_ResetPlayerState(playerid)
 // PLAYER SPAWN CONTEXT
 // ============================================================
 
-stock bool:CRP_SetPlayerSpawnType(playerid, spawnType)
+stock bool:CRP_SetPlayerSpawnType(
+    playerid,
+    spawnType
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -2547,7 +2710,8 @@ stock bool:CRP_SetPlayerSpawnType(playerid, spawnType)
         }
     }
 
-    gPlayerSpawnType[playerid] = spawnType;
+    gPlayerSpawnType[playerid] =
+        spawnType;
 
     return true;
 }
@@ -2571,7 +2735,8 @@ stock CRP_ResetPlayerSpawnType(playerid)
         return 0;
     }
 
-    gPlayerSpawnType[playerid] = CRP_SPAWN_TYPE_NONE;
+    gPlayerSpawnType[playerid] =
+        CRP_SPAWN_TYPE_NONE;
 
     return 1;
 }
@@ -2584,7 +2749,8 @@ stock bool:CRP_IsPlayerSpawnTypeIntegrityValid(playerid)
         return false;
     }
 
-    new spawnType = gPlayerSpawnType[playerid];
+    new spawnType =
+        gPlayerSpawnType[playerid];
 
     if (!CRP_IsValidPlayerSpawnType(spawnType))
     {
@@ -2644,7 +2810,10 @@ stock bool:CRP_IsPlayerLifecycleValid(playerid)
 // PLAYER LIFECYCLE SESSION VALIDATION
 // ============================================================
 
-stock bool:CRP_IsPlayerLifecycleSessionValid(playerid, sessionID)
+stock bool:CRP_IsPlayerLifecycleSessionValid(
+    playerid,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -2671,32 +2840,52 @@ stock bool:CRP_IsPlayerLifecycleSessionValid(playerid, sessionID)
         return false;
     }
 
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (!CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (!CRP_IsValidPlayerSession(playerid, sessionID))
+    if (!CRP_IsValidPlayerSession(
+        playerid,
+        sessionID
+    ))
     {
         return false;
     }
 
-    if (!CRP_IsValidPlayerDataSession(playerid, sessionID))
+    if (!CRP_IsValidPlayerDataSession(
+        playerid,
+        sessionID
+    ))
     {
         return false;
     }
 
-    if (gPlayerStateSessionID[playerid] != sessionID)
+    if (
+        gPlayerStateSessionID[playerid] !=
+        sessionID
+    )
     {
         return false;
     }
 
-    if (gPlayerStateTransitionSessionID[playerid] != sessionID)
+    if (
+        gPlayerStateTransitionSessionID[playerid] !=
+        sessionID
+    )
     {
         return false;
     }
@@ -2709,12 +2898,18 @@ stock bool:CRP_IsPlayerLifecycleSessionValid(playerid, sessionID)
         return false;
     }
 
-    if (!CRP_IsValidPlayerContextSession(playerid, sessionID))
+    if (!CRP_IsValidPlayerContextSession(
+        playerid,
+        sessionID
+    ))
     {
         return false;
     }
 
-    if (!CRP_IsPlayerEventSessionValid(playerid, sessionID))
+    if (!CRP_IsPlayerEventSessionValid(
+        playerid,
+        sessionID
+    ))
     {
         return false;
     }
@@ -2727,9 +2922,14 @@ stock bool:CRP_IsPlayerLifecycleSessionValid(playerid, sessionID)
 // PLAYER STATE ACCESS POLICY
 // ============================================================
 
-stock bool:CRP_IsValidStateAccessRequirement(requiredState)
+stock bool:CRP_IsValidStateAccessRequirement(
+    requiredState
+)
 {
-    if (requiredState < CRP_PLAYER_STATE_CONNECTED || requiredState > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        requiredState < CRP_PLAYER_STATE_CONNECTED ||
+        requiredState > CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -2742,19 +2942,29 @@ stock bool:CRP_IsValidStateAccessRequirement(requiredState)
 // PLAYER STATE ACCESS INTEGRITY
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState)
+stock bool:CRP_IsPlayerStateAccessIntegrityValid(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return false;
     }
 
-    if (gPlayerState[playerid] < CRP_PLAYER_STATE_NONE || gPlayerState[playerid] > CRP_PLAYER_STATE_ACTIVE)
+    if (
+        gPlayerState[playerid] <
+        CRP_PLAYER_STATE_NONE ||
+        gPlayerState[playerid] >
+        CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -2767,19 +2977,27 @@ stock bool:CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState)
 // PLAYER STATE ACCESS POLICY VALIDATION
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAccessPolicyValid(playerid, requiredState)
+stock bool:CRP_IsPlayerStateAccessPolicyValid(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return false;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return false;
     }
 
-    if (!CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState))
+    if (!CRP_IsPlayerStateAccessIntegrityValid(
+        playerid,
+        requiredState
+    ))
     {
         return false;
     }
@@ -2792,20 +3010,43 @@ stock bool:CRP_IsPlayerStateAccessPolicyValid(playerid, requiredState)
 // PLAYER STATE ACCESS REASON NAME
 // ============================================================
 
-stock CRP_GetPlayerStateAccessReasonName(reason, name[], size)
+stock CRP_GetPlayerStateAccessReasonName(
+    reason,
+    name[],
+    size
+)
 {
     switch (reason)
     {
-        case CRP_ACCESS_REASON_NONE:                 format(name, size, "NONE");
-        case CRP_ACCESS_REASON_INVALID_PLAYER:       format(name, size, "INVALID_PLAYER");
-        case CRP_ACCESS_REASON_INVALID_REQUIREMENT:  format(name, size, "INVALID_REQUIREMENT");
-        case CRP_ACCESS_REASON_INVALID_ACCESS_STATE: format(name, size, "INVALID_ACCESS_STATE");
-        case CRP_ACCESS_REASON_LIFECYCLE_INVALID:   format(name, size, "LIFECYCLE_INVALID");
-        case CRP_ACCESS_REASON_SESSION_INVALID:     format(name, size, "SESSION_INVALID");
-        case CRP_ACCESS_REASON_STATE_MISMATCH:      format(name, size, "STATE_MISMATCH");
-        case CRP_ACCESS_REASON_STATE_TOO_LOW:       format(name, size, "STATE_TOO_LOW");
-        case CRP_ACCESS_REASON_STATE_ALLOWED:       format(name, size, "STATE_ALLOWED");
-        default:                                     format(name, size, "UNKNOWN");
+        case CRP_ACCESS_REASON_NONE:
+            format(name, size, "NONE");
+
+        case CRP_ACCESS_REASON_INVALID_PLAYER:
+            format(name, size, "INVALID_PLAYER");
+
+        case CRP_ACCESS_REASON_INVALID_REQUIREMENT:
+            format(name, size, "INVALID_REQUIREMENT");
+
+        case CRP_ACCESS_REASON_INVALID_ACCESS_STATE:
+            format(name, size, "INVALID_ACCESS_STATE");
+
+        case CRP_ACCESS_REASON_LIFECYCLE_INVALID:
+            format(name, size, "LIFECYCLE_INVALID");
+
+        case CRP_ACCESS_REASON_SESSION_INVALID:
+            format(name, size, "SESSION_INVALID");
+
+        case CRP_ACCESS_REASON_STATE_MISMATCH:
+            format(name, size, "STATE_MISMATCH");
+
+        case CRP_ACCESS_REASON_STATE_TOO_LOW:
+            format(name, size, "STATE_TOO_LOW");
+
+        case CRP_ACCESS_REASON_STATE_ALLOWED:
+            format(name, size, "STATE_ALLOWED");
+
+        default:
+            format(name, size, "UNKNOWN");
     }
 
     return 1;
@@ -2818,7 +3059,10 @@ stock CRP_GetPlayerStateAccessReasonName(reason, name[], size)
 
 stock bool:CRP_IsValidPlayerStateAccessReason(reason)
 {
-    if (reason < CRP_ACCESS_REASON_NONE || reason > CRP_ACCESS_REASON_STATE_ALLOWED)
+    if (
+        reason < CRP_ACCESS_REASON_NONE ||
+        reason > CRP_ACCESS_REASON_STATE_ALLOWED
+    )
     {
         return false;
     }
@@ -2833,7 +3077,10 @@ stock bool:CRP_IsValidPlayerStateAccessReason(reason)
 
 stock bool:CRP_IsValidPlayerStateAccessResult(result)
 {
-    if (result < CRP_ACCESS_RESULT_DENIED || result > CRP_ACCESS_RESULT_ALLOWED)
+    if (
+        result < CRP_ACCESS_RESULT_DENIED ||
+        result > CRP_ACCESS_RESULT_ALLOWED
+    )
     {
         return false;
     }
@@ -2866,7 +3113,10 @@ stock CRP_GetPlayerStateAccessResultFromReason(reason)
 // PLAYER STATE ACCESS DECISION CONSISTENCY
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAccessDecisionConsistent(result, reason)
+stock bool:CRP_IsPlayerStateAccessDecisionConsistent(
+    result,
+    reason
+)
 {
     if (!CRP_IsValidPlayerStateAccessResult(result))
     {
@@ -2878,7 +3128,10 @@ stock bool:CRP_IsPlayerStateAccessDecisionConsistent(result, reason)
         return false;
     }
 
-    if (result != CRP_GetPlayerStateAccessResultFromReason(reason))
+    if (
+        result !=
+        CRP_GetPlayerStateAccessResultFromReason(reason)
+    )
     {
         return false;
     }
@@ -2891,19 +3144,27 @@ stock bool:CRP_IsPlayerStateAccessDecisionConsistent(result, reason)
 // PLAYER STATE EXACT ACCESS DECISION REASON
 // ============================================================
 
-stock CRP_DecidePlayerStateExactAccessReason(playerid, requiredState)
+stock CRP_DecidePlayerStateExactAccessReason(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return CRP_ACCESS_REASON_INVALID_PLAYER;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_REQUIREMENT;
     }
 
-    if (!CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState))
+    if (!CRP_IsPlayerStateAccessIntegrityValid(
+        playerid,
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_ACCESS_STATE;
     }
@@ -2913,7 +3174,10 @@ stock CRP_DecidePlayerStateExactAccessReason(playerid, requiredState)
         return CRP_ACCESS_REASON_LIFECYCLE_INVALID;
     }
 
-    if (gPlayerState[playerid] != requiredState)
+    if (
+        gPlayerState[playerid] !=
+        requiredState
+    )
     {
         return CRP_ACCESS_REASON_STATE_MISMATCH;
     }
@@ -2926,29 +3190,44 @@ stock CRP_DecidePlayerStateExactAccessReason(playerid, requiredState)
 // PLAYER STATE EXACT ACCESS SESSION DECISION REASON
 // ============================================================
 
-stock CRP_DecidePlayerStateExactAccessReasonForSession(playerid, requiredState, sessionID)
+stock CRP_DecidePlayerStateExactAccessReasonForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return CRP_ACCESS_REASON_INVALID_PLAYER;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_REQUIREMENT;
     }
 
-    if (!CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState))
+    if (!CRP_IsPlayerStateAccessIntegrityValid(
+        playerid,
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_ACCESS_STATE;
     }
 
-    if (!CRP_IsPlayerLifecycleSessionValid(playerid, sessionID))
+    if (!CRP_IsPlayerLifecycleSessionValid(
+        playerid,
+        sessionID
+    ))
     {
         return CRP_ACCESS_REASON_SESSION_INVALID;
     }
 
-    if (gPlayerState[playerid] != requiredState)
+    if (
+        gPlayerState[playerid] !=
+        requiredState
+    )
     {
         return CRP_ACCESS_REASON_STATE_MISMATCH;
     }
@@ -2961,19 +3240,27 @@ stock CRP_DecidePlayerStateExactAccessReasonForSession(playerid, requiredState, 
 // PLAYER STATE MINIMUM ACCESS DECISION REASON
 // ============================================================
 
-stock CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState)
+stock CRP_DecidePlayerStateMinimumAccessReason(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return CRP_ACCESS_REASON_INVALID_PLAYER;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_REQUIREMENT;
     }
 
-    if (!CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState))
+    if (!CRP_IsPlayerStateAccessIntegrityValid(
+        playerid,
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_ACCESS_STATE;
     }
@@ -2983,7 +3270,10 @@ stock CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState)
         return CRP_ACCESS_REASON_LIFECYCLE_INVALID;
     }
 
-    if (gPlayerState[playerid] < requiredState)
+    if (
+        gPlayerState[playerid] <
+        requiredState
+    )
     {
         return CRP_ACCESS_REASON_STATE_TOO_LOW;
     }
@@ -2996,29 +3286,44 @@ stock CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState)
 // PLAYER STATE MINIMUM ACCESS SESSION DECISION REASON
 // ============================================================
 
-stock CRP_DecidePlayerStateMinimumAccessReasonForSession(playerid, requiredState, sessionID)
+stock CRP_DecidePlayerStateMinimumAccessReasonForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return CRP_ACCESS_REASON_INVALID_PLAYER;
     }
 
-    if (!CRP_IsValidStateAccessRequirement(requiredState))
+    if (!CRP_IsValidStateAccessRequirement(
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_REQUIREMENT;
     }
 
-    if (!CRP_IsPlayerStateAccessIntegrityValid(playerid, requiredState))
+    if (!CRP_IsPlayerStateAccessIntegrityValid(
+        playerid,
+        requiredState
+    ))
     {
         return CRP_ACCESS_REASON_INVALID_ACCESS_STATE;
     }
 
-    if (!CRP_IsPlayerLifecycleSessionValid(playerid, sessionID))
+    if (!CRP_IsPlayerLifecycleSessionValid(
+        playerid,
+        sessionID
+    ))
     {
         return CRP_ACCESS_REASON_SESSION_INVALID;
     }
 
-    if (gPlayerState[playerid] < requiredState)
+    if (
+        gPlayerState[playerid] <
+        requiredState
+    )
     {
         return CRP_ACCESS_REASON_STATE_TOO_LOW;
     }
@@ -3031,17 +3336,34 @@ stock CRP_DecidePlayerStateMinimumAccessReasonForSession(playerid, requiredState
 // PLAYER STATE EXACT ACCESS DECISION
 // ============================================================
 
-stock bool:CRP_DecidePlayerStateExactAccess(playerid, requiredState)
+stock bool:CRP_DecidePlayerStateExactAccess(
+    playerid,
+    requiredState
+)
 {
-    new reason = CRP_DecidePlayerStateExactAccessReason(playerid, requiredState);
-    new result = CRP_GetPlayerStateAccessResultFromReason(reason);
+    new reason =
+        CRP_DecidePlayerStateExactAccessReason(
+            playerid,
+            requiredState
+        );
 
-    if (!CRP_IsPlayerStateAccessDecisionConsistent(result, reason))
+    new result =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
+
+    if (!CRP_IsPlayerStateAccessDecisionConsistent(
+        result,
+        reason
+    ))
     {
         return false;
     }
 
-    return (result == CRP_ACCESS_RESULT_ALLOWED);
+    return (
+        result ==
+        CRP_ACCESS_RESULT_ALLOWED
+    );
 }
 
 
@@ -3049,17 +3371,36 @@ stock bool:CRP_DecidePlayerStateExactAccess(playerid, requiredState)
 // PLAYER STATE EXACT ACCESS SESSION DECISION
 // ============================================================
 
-stock bool:CRP_DecidePlayerStateExactAccessForSession(playerid, requiredState, sessionID)
+stock bool:CRP_DecidePlayerStateExactAccessForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
-    new reason = CRP_DecidePlayerStateExactAccessReasonForSession(playerid, requiredState, sessionID);
-    new result = CRP_GetPlayerStateAccessResultFromReason(reason);
+    new reason =
+        CRP_DecidePlayerStateExactAccessReasonForSession(
+            playerid,
+            requiredState,
+            sessionID
+        );
 
-    if (!CRP_IsPlayerStateAccessDecisionConsistent(result, reason))
+    new result =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
+
+    if (!CRP_IsPlayerStateAccessDecisionConsistent(
+        result,
+        reason
+    ))
     {
         return false;
     }
 
-    return (result == CRP_ACCESS_RESULT_ALLOWED);
+    return (
+        result ==
+        CRP_ACCESS_RESULT_ALLOWED
+    );
 }
 
 
@@ -3067,17 +3408,34 @@ stock bool:CRP_DecidePlayerStateExactAccessForSession(playerid, requiredState, s
 // PLAYER STATE MINIMUM ACCESS DECISION
 // ============================================================
 
-stock bool:CRP_DecidePlayerStateMinimumAccess(playerid, requiredState)
+stock bool:CRP_DecidePlayerStateMinimumAccess(
+    playerid,
+    requiredState
+)
 {
-    new reason = CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState);
-    new result = CRP_GetPlayerStateAccessResultFromReason(reason);
+    new reason =
+        CRP_DecidePlayerStateMinimumAccessReason(
+            playerid,
+            requiredState
+        );
 
-    if (!CRP_IsPlayerStateAccessDecisionConsistent(result, reason))
+    new result =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
+
+    if (!CRP_IsPlayerStateAccessDecisionConsistent(
+        result,
+        reason
+    ))
     {
         return false;
     }
 
-    return (result == CRP_ACCESS_RESULT_ALLOWED);
+    return (
+        result ==
+        CRP_ACCESS_RESULT_ALLOWED
+    );
 }
 
 
@@ -3085,17 +3443,36 @@ stock bool:CRP_DecidePlayerStateMinimumAccess(playerid, requiredState)
 // PLAYER STATE MINIMUM ACCESS SESSION DECISION
 // ============================================================
 
-stock bool:CRP_DecidePlayerStateMinimumAccessForSession(playerid, requiredState, sessionID)
+stock bool:CRP_DecidePlayerStateMinimumAccessForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
-    new reason = CRP_DecidePlayerStateMinimumAccessReasonForSession(playerid, requiredState, sessionID);
-    new result = CRP_GetPlayerStateAccessResultFromReason(reason);
+    new reason =
+        CRP_DecidePlayerStateMinimumAccessReasonForSession(
+            playerid,
+            requiredState,
+            sessionID
+        );
 
-    if (!CRP_IsPlayerStateAccessDecisionConsistent(result, reason))
+    new result =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
+
+    if (!CRP_IsPlayerStateAccessDecisionConsistent(
+        result,
+        reason
+    ))
     {
         return false;
     }
 
-    return (result == CRP_ACCESS_RESULT_ALLOWED);
+    return (
+        result ==
+        CRP_ACCESS_RESULT_ALLOWED
+    );
 }
 
 
@@ -3103,9 +3480,15 @@ stock bool:CRP_DecidePlayerStateMinimumAccessForSession(playerid, requiredState,
 // PLAYER STATE ACCESS GATE
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAllowed(playerid, requiredState)
+stock bool:CRP_IsPlayerStateAllowed(
+    playerid,
+    requiredState
+)
 {
-    return CRP_DecidePlayerStateExactAccess(playerid, requiredState);
+    return CRP_DecidePlayerStateExactAccess(
+        playerid,
+        requiredState
+    );
 }
 
 
@@ -3113,9 +3496,17 @@ stock bool:CRP_IsPlayerStateAllowed(playerid, requiredState)
 // PLAYER STATE ACCESS SESSION GATE
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAllowedForSession(playerid, requiredState, sessionID)
+stock bool:CRP_IsPlayerStateAllowedForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
-    return CRP_DecidePlayerStateExactAccessForSession(playerid, requiredState, sessionID);
+    return CRP_DecidePlayerStateExactAccessForSession(
+        playerid,
+        requiredState,
+        sessionID
+    );
 }
 
 
@@ -3123,9 +3514,15 @@ stock bool:CRP_IsPlayerStateAllowedForSession(playerid, requiredState, sessionID
 // PLAYER STATE MINIMUM ACCESS
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAtLeast(playerid, requiredState)
+stock bool:CRP_IsPlayerStateAtLeast(
+    playerid,
+    requiredState
+)
 {
-    return CRP_DecidePlayerStateMinimumAccess(playerid, requiredState);
+    return CRP_DecidePlayerStateMinimumAccess(
+        playerid,
+        requiredState
+    );
 }
 
 
@@ -3133,9 +3530,17 @@ stock bool:CRP_IsPlayerStateAtLeast(playerid, requiredState)
 // PLAYER STATE MINIMUM ACCESS SESSION GATE
 // ============================================================
 
-stock bool:CRP_IsPlayerStateAtLeastForSession(playerid, requiredState, sessionID)
+stock bool:CRP_IsPlayerStateAtLeastForSession(
+    playerid,
+    requiredState,
+    sessionID
+)
 {
-    return CRP_DecidePlayerStateMinimumAccessForSession(playerid, requiredState, sessionID);
+    return CRP_DecidePlayerStateMinimumAccessForSession(
+        playerid,
+        requiredState,
+        sessionID
+    );
 }
 
 
@@ -3143,7 +3548,10 @@ stock bool:CRP_IsPlayerStateAtLeastForSession(playerid, requiredState, sessionID
 // PLAYER STATE ACCESS DEBUG
 // ============================================================
 
-stock CRP_DebugPlayerStateAccess(playerid, requiredState)
+stock CRP_DebugPlayerStateAccess(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3153,8 +3561,17 @@ stock CRP_DebugPlayerStateAccess(playerid, requiredState)
     new currentStateName[32];
     new requiredStateName[32];
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], currentStateName, sizeof(currentStateName));
-    CRP_GetPlayerStateName(requiredState, requiredStateName, sizeof(requiredStateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        currentStateName,
+        sizeof(currentStateName)
+    );
+
+    CRP_GetPlayerStateName(
+        requiredState,
+        requiredStateName,
+        sizeof(requiredStateName)
+    );
 
     printf(
         "[CRP] State Access | Player: %d | Current: %s | Required: %s | Session: %d",
@@ -3164,13 +3581,22 @@ stock CRP_DebugPlayerStateAccess(playerid, requiredState)
         gPlayerSessionID[playerid]
     );
 
-    if (CRP_IsPlayerStateAllowed(playerid, requiredState))
+    if (
+        CRP_IsPlayerStateAllowed(
+            playerid,
+            requiredState
+        )
+    )
     {
-        printf("[CRP] State Access | Status: ALLOWED");
+        printf(
+            "[CRP] State Access | Status: ALLOWED"
+        );
     }
     else
     {
-        printf("[CRP] State Access | Status: DENIED");
+        printf(
+            "[CRP] State Access | Status: DENIED"
+        );
     }
 
     return 1;
@@ -3181,7 +3607,10 @@ stock CRP_DebugPlayerStateAccess(playerid, requiredState)
 // PLAYER STATE MINIMUM ACCESS DEBUG
 // ============================================================
 
-stock CRP_DebugPlayerStateMinimumAccess(playerid, requiredState)
+stock CRP_DebugPlayerStateMinimumAccess(
+    playerid,
+    requiredState
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3191,8 +3620,17 @@ stock CRP_DebugPlayerStateMinimumAccess(playerid, requiredState)
     new currentStateName[32];
     new requiredStateName[32];
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], currentStateName, sizeof(currentStateName));
-    CRP_GetPlayerStateName(requiredState, requiredStateName, sizeof(requiredStateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        currentStateName,
+        sizeof(currentStateName)
+    );
+
+    CRP_GetPlayerStateName(
+        requiredState,
+        requiredStateName,
+        sizeof(requiredStateName)
+    );
 
     printf(
         "[CRP] State Minimum Access | Player: %d | Current: %s | Minimum: %s | Session: %d",
@@ -3202,13 +3640,22 @@ stock CRP_DebugPlayerStateMinimumAccess(playerid, requiredState)
         gPlayerSessionID[playerid]
     );
 
-    if (CRP_IsPlayerStateAtLeast(playerid, requiredState))
+    if (
+        CRP_IsPlayerStateAtLeast(
+            playerid,
+            requiredState
+        )
+    )
     {
-        printf("[CRP] State Minimum Access | Status: ALLOWED");
+        printf(
+            "[CRP] State Minimum Access | Status: ALLOWED"
+        );
     }
     else
     {
-        printf("[CRP] State Minimum Access | Status: DENIED");
+        printf(
+            "[CRP] State Minimum Access | Status: DENIED"
+        );
     }
 
     return 1;
@@ -3219,7 +3666,11 @@ stock CRP_DebugPlayerStateMinimumAccess(playerid, requiredState)
 // PLAYER STATE ACCESS DECISION DEBUG
 // ============================================================
 
-stock CRP_DebugPlayerStateAccessDecision(playerid, requiredState, bool:minimumAccess)
+stock CRP_DebugPlayerStateAccessDecision(
+    playerid,
+    requiredState,
+    bool:minimumAccess
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3229,8 +3680,17 @@ stock CRP_DebugPlayerStateAccessDecision(playerid, requiredState, bool:minimumAc
     new currentStateName[32];
     new requiredStateName[32];
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], currentStateName, sizeof(currentStateName));
-    CRP_GetPlayerStateName(requiredState, requiredStateName, sizeof(requiredStateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        currentStateName,
+        sizeof(currentStateName)
+    );
+
+    CRP_GetPlayerStateName(
+        requiredState,
+        requiredStateName,
+        sizeof(requiredStateName)
+    );
 
     printf(
         "[CRP] Access Decision | Player: %d | Current: %s | Required: %s | Session: %d | Mode: %s",
@@ -3243,24 +3703,42 @@ stock CRP_DebugPlayerStateAccessDecision(playerid, requiredState, bool:minimumAc
 
     if (minimumAccess)
     {
-        if (CRP_DecidePlayerStateMinimumAccess(playerid, requiredState))
+        if (
+            CRP_DecidePlayerStateMinimumAccess(
+                playerid,
+                requiredState
+            )
+        )
         {
-            printf("[CRP] Access Decision | Result: ALLOWED");
+            printf(
+                "[CRP] Access Decision | Result: ALLOWED"
+            );
         }
         else
         {
-            printf("[CRP] Access Decision | Result: DENIED");
+            printf(
+                "[CRP] Access Decision | Result: DENIED"
+            );
         }
     }
     else
     {
-        if (CRP_DecidePlayerStateExactAccess(playerid, requiredState))
+        if (
+            CRP_DecidePlayerStateExactAccess(
+                playerid,
+                requiredState
+            )
+        )
         {
-            printf("[CRP] Access Decision | Result: ALLOWED");
+            printf(
+                "[CRP] Access Decision | Result: ALLOWED"
+            );
         }
         else
         {
-            printf("[CRP] Access Decision | Result: DENIED");
+            printf(
+                "[CRP] Access Decision | Result: DENIED"
+            );
         }
     }
 
@@ -3272,7 +3750,11 @@ stock CRP_DebugPlayerStateAccessDecision(playerid, requiredState, bool:minimumAc
 // PLAYER STATE ACCESS DECISION REASON DEBUG
 // ============================================================
 
-stock CRP_DebugPlayerStateAccessDecisionReason(playerid, requiredState, bool:minimumAccess)
+stock CRP_DebugPlayerStateAccessDecisionReason(
+    playerid,
+    requiredState,
+    bool:minimumAccess
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3284,19 +3766,40 @@ stock CRP_DebugPlayerStateAccessDecisionReason(playerid, requiredState, bool:min
     new reasonName[40];
     new reason;
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], currentStateName, sizeof(currentStateName));
-    CRP_GetPlayerStateName(requiredState, requiredStateName, sizeof(requiredStateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        currentStateName,
+        sizeof(currentStateName)
+    );
+
+    CRP_GetPlayerStateName(
+        requiredState,
+        requiredStateName,
+        sizeof(requiredStateName)
+    );
 
     if (minimumAccess)
     {
-        reason = CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState);
+        reason =
+            CRP_DecidePlayerStateMinimumAccessReason(
+                playerid,
+                requiredState
+            );
     }
     else
     {
-        reason = CRP_DecidePlayerStateExactAccessReason(playerid, requiredState);
+        reason =
+            CRP_DecidePlayerStateExactAccessReason(
+                playerid,
+                requiredState
+            );
     }
 
-    CRP_GetPlayerStateAccessReasonName(reason, reasonName, sizeof(reasonName));
+    CRP_GetPlayerStateAccessReasonName(
+        reason,
+        reasonName,
+        sizeof(reasonName)
+    );
 
     printf(
         "[CRP] Access Decision Reason | Player: %d | Current: %s | Required: %s | Session: %d | Mode: %s",
@@ -3307,13 +3810,22 @@ stock CRP_DebugPlayerStateAccessDecisionReason(playerid, requiredState, bool:min
         minimumAccess ? "MINIMUM" : "EXACT"
     );
 
-    if (reason == CRP_ACCESS_REASON_STATE_ALLOWED)
+    if (
+        reason ==
+        CRP_ACCESS_REASON_STATE_ALLOWED
+    )
     {
-        printf("[CRP] Access Decision Reason | Result: ALLOWED | Reason: %s", reasonName);
+        printf(
+            "[CRP] Access Decision Reason | Result: ALLOWED | Reason: %s",
+            reasonName
+        );
     }
     else
     {
-        printf("[CRP] Access Decision Reason | Result: DENIED | Reason: %s", reasonName);
+        printf(
+            "[CRP] Access Decision Reason | Result: DENIED | Reason: %s",
+            reasonName
+        );
     }
 
     return 1;
@@ -3324,7 +3836,11 @@ stock CRP_DebugPlayerStateAccessDecisionReason(playerid, requiredState, bool:min
 // PLAYER STATE ACCESS DECISION CONSISTENCY DEBUG
 // ============================================================
 
-stock CRP_DebugPlayerStateAccessDecisionConsistency(playerid, requiredState, bool:minimumAccess)
+stock CRP_DebugPlayerStateAccessDecisionConsistency(
+    playerid,
+    requiredState,
+    bool:minimumAccess
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3339,22 +3855,50 @@ stock CRP_DebugPlayerStateAccessDecisionConsistency(playerid, requiredState, boo
     new result;
     new expectedResult;
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], currentStateName, sizeof(currentStateName));
-    CRP_GetPlayerStateName(requiredState, requiredStateName, sizeof(requiredStateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        currentStateName,
+        sizeof(currentStateName)
+    );
+
+    CRP_GetPlayerStateName(
+        requiredState,
+        requiredStateName,
+        sizeof(requiredStateName)
+    );
 
     if (minimumAccess)
     {
-        reason = CRP_DecidePlayerStateMinimumAccessReason(playerid, requiredState);
+        reason =
+            CRP_DecidePlayerStateMinimumAccessReason(
+                playerid,
+                requiredState
+            );
     }
     else
     {
-        reason = CRP_DecidePlayerStateExactAccessReason(playerid, requiredState);
+        reason =
+            CRP_DecidePlayerStateExactAccessReason(
+                playerid,
+                requiredState
+            );
     }
 
-    result = CRP_GetPlayerStateAccessResultFromReason(reason);
-    expectedResult = CRP_GetPlayerStateAccessResultFromReason(reason);
+    result =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
 
-    CRP_GetPlayerStateAccessReasonName(reason, reasonName, sizeof(reasonName));
+    expectedResult =
+        CRP_GetPlayerStateAccessResultFromReason(
+            reason
+        );
+
+    CRP_GetPlayerStateAccessReasonName(
+        reason,
+        reasonName,
+        sizeof(reasonName)
+    );
 
     printf(
         "[CRP] Access Consistency | Player: %d | Current: %s | Required: %s | Mode: %s | Reason: %s | Result: %d | Expected: %d",
@@ -3367,13 +3911,22 @@ stock CRP_DebugPlayerStateAccessDecisionConsistency(playerid, requiredState, boo
         expectedResult
     );
 
-    if (CRP_IsPlayerStateAccessDecisionConsistent(result, reason))
+    if (
+        CRP_IsPlayerStateAccessDecisionConsistent(
+            result,
+            reason
+        )
+    )
     {
-        printf("[CRP] Access Consistency | Status: VALID");
+        printf(
+            "[CRP] Access Consistency | Status: VALID"
+        );
     }
     else
     {
-        printf("[CRP] Access Consistency | Status: INVALID");
+        printf(
+            "[CRP] Access Consistency | Status: INVALID"
+        );
     }
 
     return 1;
@@ -3381,7 +3934,7 @@ stock CRP_DebugPlayerStateAccessDecisionConsistency(playerid, requiredState, boo
 
 
 // ============================================================
-// PLAYER SYSTEM STATUS (v3.2 REVISED)
+// PLAYER SYSTEM STATUS
 // ============================================================
 
 stock bool:CRP_IsPlayerActive(playerid)
@@ -3406,23 +3959,25 @@ stock bool:CRP_IsPlayerActive(playerid)
         return false;
     }
 
-    // Checking character readiness (v3.2)
-    if (!CRP_IsPlayerCharacterDataValid(playerid))
-    {
-        return false;
-    }
-
     if (!CRP_IsPlayerStateHistoryIntegrityValid(playerid))
     {
         return false;
     }
 
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (!CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
@@ -3432,12 +3987,19 @@ stock bool:CRP_IsPlayerActive(playerid)
         return false;
     }
 
-    if (!CRP_IsPlayerLifecycleEventIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerLifecycleEventIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (gPlayerState[playerid] != CRP_PLAYER_STATE_ACTIVE)
+    if (
+        gPlayerState[playerid] !=
+        CRP_PLAYER_STATE_ACTIVE
+    )
     {
         return false;
     }
@@ -3483,7 +4045,11 @@ stock bool:CRP_IsPlayerSystemReady(playerid)
         return false;
     }
 
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
@@ -3493,7 +4059,11 @@ stock bool:CRP_IsPlayerSystemReady(playerid)
         return false;
     }
 
-    if (!CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
@@ -3508,12 +4078,19 @@ stock bool:CRP_IsPlayerSystemReady(playerid)
         return false;
     }
 
-    if (!CRP_IsPlayerLifecycleEventIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerLifecycleEventIntegrityValid(
+            playerid
+        )
+    )
     {
         return false;
     }
 
-    if (CRP_GetPlayerState(playerid) == CRP_PLAYER_STATE_NONE)
+    if (
+        CRP_GetPlayerState(playerid) ==
+        CRP_PLAYER_STATE_NONE
+    )
     {
         return false;
     }
@@ -3572,7 +4149,11 @@ stock CRP_DebugPlayerState(playerid)
 
     new stateName[32];
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], stateName, sizeof(stateName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        stateName,
+        sizeof(stateName)
+    );
 
     printf(
         "[CRP] Player State | Player: %d | State: %s | Session: %d",
@@ -3603,13 +4184,21 @@ stock CRP_DebugPlayerRuntimeTransition(playerid)
         gPlayerRuntimeTransitionSessionID[playerid]
     );
 
-    if (CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
+    if (
+        CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
-        printf("[CRP] Runtime Transition | Status: VALID");
+        printf(
+            "[CRP] Runtime Transition | Status: VALID"
+        );
     }
     else
     {
-        printf("[CRP] Runtime Transition | Status: INVALID");
+        printf(
+            "[CRP] Runtime Transition | Status: INVALID"
+        );
     }
 
     return 1;
@@ -3626,8 +4215,17 @@ stock CRP_DebugPlayerLifecycle(playerid)
     new stateName[32];
     new eventName[32];
 
-    CRP_GetPlayerStateName(gPlayerState[playerid], stateName, sizeof(stateName));
-    CRP_GetPlayerEventName(gPlayerLastEvent[playerid], eventName, sizeof(eventName));
+    CRP_GetPlayerStateName(
+        gPlayerState[playerid],
+        stateName,
+        sizeof(stateName)
+    );
+
+    CRP_GetPlayerEventName(
+        gPlayerLastEvent[playerid],
+        eventName,
+        sizeof(eventName)
+    );
 
     printf(
         "[CRP] Lifecycle | Player: %d | State: %s | Previous: %d | Identity: %d | Session: %d | State Session: %d | Transition Count: %d | Transition Session: %d | Data: %d | Data Session: %d | Context: %d | Context Session: %d | Context State: %d | Event: %s | Event Count: %d | Event Session: %d | Spawned: %d | Dead: %d | Runtime Transition Count: %d | Runtime Transition Session: %d | Spawn Type: %d",
@@ -3668,7 +4266,7 @@ stock CRP_DebugPlayerLifecycle(playerid)
 
 
 // ============================================================
-// PLAYER CONNECT (v3.2 REVISED)
+// PLAYER CONNECT
 // ============================================================
 
 stock CRP_HandlePlayerConnect(playerid)
@@ -3687,7 +4285,6 @@ stock CRP_HandlePlayerConnect(playerid)
     CRP_ResetPlayerRuntimeTransitionAudit(playerid);
     CRP_ResetPlayerIdentity(playerid);
     CRP_ResetPlayerData(playerid);
-    CRP_ResetPlayerCharacterData(playerid); // Reset Character Data (v3.2)
     CRP_ResetPlayerContext(playerid);
     CRP_ResetPlayerEvent(playerid);
     CRP_ResetPlayerSpawnType(playerid);
@@ -3701,7 +4298,8 @@ stock CRP_HandlePlayerConnect(playerid)
         return 0;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     if (!CRP_InitPlayerIdentity(playerid))
     {
@@ -3716,7 +4314,10 @@ stock CRP_HandlePlayerConnect(playerid)
         return 0;
     }
 
-    if (!CRP_SetPlayerState(playerid, CRP_PLAYER_STATE_CONNECTED))
+    if (!CRP_SetPlayerState(
+        playerid,
+        CRP_PLAYER_STATE_CONNECTED
+    ))
     {
         CRP_ResetPlayerData(playerid);
         CRP_ResetPlayerIdentity(playerid);
@@ -3727,7 +4328,10 @@ stock CRP_HandlePlayerConnect(playerid)
         return 0;
     }
 
-    if (!CRP_RecordPlayerEvent(playerid, CRP_PLAYER_EVENT_CONNECT))
+    if (!CRP_RecordPlayerEvent(
+        playerid,
+        CRP_PLAYER_EVENT_CONNECT
+    ))
     {
         CRP_ResetPlayerState(playerid);
         CRP_ResetPlayerStateHistory(playerid);
@@ -3781,7 +4385,7 @@ stock CRP_HandlePlayerConnect(playerid)
     SendClientMessage(
         playerid,
         COLOR_WHITE,
-        "Crystal Roleplay Development | Core v3.2"
+        "Crystal Roleplay Development | Core v3.1"
     );
 
     CRP_DebugPlayerIdentity(playerid);
@@ -3827,46 +4431,80 @@ stock CRP_HandlePlayerSpawn(playerid)
         return 0;
     }
 
-    if (!CRP_CanHandlePlayerEvent(playerid, CRP_PLAYER_EVENT_SPAWN))
+    if (!CRP_CanHandlePlayerEvent(
+        playerid,
+        CRP_PLAYER_EVENT_SPAWN
+    ))
     {
         return 0;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
-    if (CRP_GetPlayerSpawnType(playerid) == CRP_SPAWN_TYPE_NONE)
+    if (
+        CRP_GetPlayerSpawnType(playerid) ==
+        CRP_SPAWN_TYPE_NONE
+    )
     {
-        if (!CRP_SetPlayerSpawnType(playerid, CRP_SPAWN_TYPE_DEFAULT))
+        if (!CRP_SetPlayerSpawnType(
+            playerid,
+            CRP_SPAWN_TYPE_DEFAULT
+        ))
         {
             return 0;
         }
     }
 
-    if (!CRP_SetPlayerDeadSafe(playerid, false))
+    if (!CRP_SetPlayerDeadSafe(
+        playerid,
+        false
+    ))
     {
         return 0;
     }
 
-    if (!CRP_SetPlayerSpawnedSafe(playerid, true))
+    if (!CRP_SetPlayerSpawnedSafe(
+        playerid,
+        true
+    ))
     {
         return 0;
     }
 
-    if (!CRP_RecordPlayerEvent(playerid, CRP_PLAYER_EVENT_SPAWN))
+    if (!CRP_RecordPlayerEvent(
+        playerid,
+        CRP_PLAYER_EVENT_SPAWN
+    ))
     {
-        CRP_SetPlayerSpawned(playerid, false);
+        CRP_SetPlayerSpawned(
+            playerid,
+            false
+        );
+
         return 0;
     }
 
-    if (!CRP_IsPlayerLifecycleSessionValid(playerid, sessionID))
+    if (!CRP_IsPlayerLifecycleSessionValid(
+        playerid,
+        sessionID
+    ))
     {
-        CRP_SetPlayerSpawned(playerid, false);
+        CRP_SetPlayerSpawned(
+            playerid,
+            false
+        );
+
         return 0;
     }
 
     if (!CRP_IsPlayerSpawnTypeIntegrityValid(playerid))
     {
-        CRP_SetPlayerSpawned(playerid, false);
+        CRP_SetPlayerSpawned(
+            playerid,
+            false
+        );
+
         CRP_ResetPlayerSpawnType(playerid);
 
         return 0;
@@ -3890,7 +4528,11 @@ stock CRP_HandlePlayerSpawn(playerid)
 // PLAYER DEATH
 // ============================================================
 
-stock CRP_HandlePlayerDeath(playerid, killerid, reason)
+stock CRP_HandlePlayerDeath(
+    playerid,
+    killerid,
+    reason
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
@@ -3907,35 +4549,66 @@ stock CRP_HandlePlayerDeath(playerid, killerid, reason)
         return 0;
     }
 
-    if (!CRP_CanHandlePlayerEvent(playerid, CRP_PLAYER_EVENT_DEATH))
+    if (!CRP_CanHandlePlayerEvent(
+        playerid,
+        CRP_PLAYER_EVENT_DEATH
+    ))
     {
         return 0;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
-    if (!CRP_SetPlayerSpawnedSafe(playerid, false))
+    if (!CRP_SetPlayerSpawnedSafe(
+        playerid,
+        false
+    ))
     {
         return 0;
     }
 
-    if (!CRP_SetPlayerDeadSafe(playerid, true))
+    if (!CRP_SetPlayerDeadSafe(
+        playerid,
+        true
+    ))
     {
-        CRP_SetPlayerSpawned(playerid, true);
+        CRP_SetPlayerSpawned(
+            playerid,
+            true
+        );
+
         return 0;
     }
 
-    if (!CRP_RecordPlayerEvent(playerid, CRP_PLAYER_EVENT_DEATH))
+    if (!CRP_RecordPlayerEvent(
+        playerid,
+        CRP_PLAYER_EVENT_DEATH
+    ))
     {
-        CRP_SetPlayerDead(playerid, false);
-        CRP_SetPlayerSpawned(playerid, true);
+        CRP_SetPlayerDead(
+            playerid,
+            false
+        );
+
+        CRP_SetPlayerSpawned(
+            playerid,
+            true
+        );
 
         return 0;
     }
 
-    if (!CRP_IsPlayerLifecycleSessionValid(playerid, sessionID))
+    if (!CRP_IsPlayerLifecycleSessionValid(
+        playerid,
+        sessionID
+    ))
     {
-        CRP_SetPlayerDead(playerid, false);
+        CRP_SetPlayerDead(
+            playerid,
+            false
+        );
+
         return 0;
     }
 
@@ -3955,17 +4628,21 @@ stock CRP_HandlePlayerDeath(playerid, killerid, reason)
 
 
 // ============================================================
-// PLAYER DISCONNECT (v3.2 REVISED)
+// PLAYER DISCONNECT
 // ============================================================
 
-stock CRP_HandlePlayerDisconnect(playerid, reason)
+stock CRP_HandlePlayerDisconnect(
+    playerid,
+    reason
+)
 {
     if (!CRP_IsPlayerValid(playerid))
     {
         return 0;
     }
 
-    new sessionID = CRP_GetPlayerSessionID(playerid);
+    new sessionID =
+        CRP_GetPlayerSessionID(playerid);
 
     printf(
         "[CRP] Lifecycle | Player disconnect | ID: %d | Name: %s | Session: %d | Reason: %d | Runtime Transition Count: %d",
@@ -3976,7 +4653,10 @@ stock CRP_HandlePlayerDisconnect(playerid, reason)
         gPlayerRuntimeTransitionCount[playerid]
     );
 
-    if (gPlayerLastEvent[playerid] != CRP_PLAYER_EVENT_NONE)
+    if (
+        gPlayerLastEvent[playerid] !=
+        CRP_PLAYER_EVENT_NONE
+    )
     {
         if (!CRP_RecordPlayerDisconnectEvent(playerid))
         {
@@ -4000,7 +4680,6 @@ stock CRP_HandlePlayerDisconnect(playerid, reason)
     CRP_EndPlayerSession(playerid);
     CRP_ResetPlayerContext(playerid);
     CRP_ResetPlayerData(playerid);
-    CRP_ResetPlayerCharacterData(playerid); // Clear character data (v3.2)
     CRP_ResetPlayerSpawnType(playerid);
     CRP_ResetPlayerStateHistory(playerid);
     CRP_ResetPlayerStateTransitionAudit(playerid);
@@ -4030,12 +4709,20 @@ stock CRP_HandlePlayerDisconnect(playerid, reason)
         return 0;
     }
 
-    if (!CRP_IsPlayerStateTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerStateTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return 0;
     }
 
-    if (!CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(playerid))
+    if (
+        !CRP_IsPlayerRuntimeTransitionAuditIntegrityValid(
+            playerid
+        )
+    )
     {
         return 0;
     }
@@ -4045,27 +4732,30 @@ stock CRP_HandlePlayerDisconnect(playerid, reason)
         return 0;
     }
 
-    if (!CRP_IsPlayerLifecycleEventIntegrityValid(playerid))
+    if (!CRP_IsPlayerLifecycleEventIntegrityValid(
+        playerid
+    ))
     {
         return 0;
     }
 
-    if (gPlayerState[playerid] != CRP_PLAYER_STATE_NONE)
+    if (
+        gPlayerState[playerid] !=
+        CRP_PLAYER_STATE_NONE
+    )
     {
         return 0;
     }
 
-    if (gPlayerSpawned[playerid] || gPlayerDead[playerid])
+    if (
+        gPlayerSpawned[playerid] ||
+        gPlayerDead[playerid]
+    )
     {
         return 0;
     }
 
     if (gPlayerIdentityReady[playerid])
-    {
-        return 0;
-    }
-
-    if (gPlayerCharacterDataReady[playerid]) // Character Cleanup Verification (v3.2)
     {
         return 0;
     }
@@ -4089,14 +4779,14 @@ stock CRP_HandlePlayerDisconnect(playerid, reason)
 
 
 // ============================================================
-// MAIN ENTRY POINT
+// MAIN
 // ============================================================
 
 main()
 {
     print("---------------------------------------");
     print("     CRYSTAL ROLEPLAY - DEVELOPMENT    ");
-    print("     Core Gamemode v3.2                ");
+    print("     Core Gamemode v3.1                ");
     print("                                         ");
     print("     Developer : Muhammad Rizal        ");
     print("     Project   : Crystal Roleplay      ");
@@ -4105,12 +4795,12 @@ main()
 
 
 // ============================================================
-// GAME MODE INIT & EXIT (v3.2 REVISED)
+// GAME MODE INIT
 // ============================================================
 
 public OnGameModeInit()
 {
-    SetGameModeText("Crystal Roleplay v3.2");
+    SetGameModeText("Crystal Roleplay");
 
     SetWeather(10);
     SetWorldTime(12);
@@ -4130,11 +4820,14 @@ public OnGameModeInit()
 
     gCRPSessionCounter = 0;
 
-    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
+    for (
+        new playerid = 0;
+        playerid < MAX_PLAYERS;
+        playerid++
+    )
     {
         CRP_ResetPlayerIdentity(playerid);
         CRP_ResetPlayerData(playerid);
-        CRP_ResetPlayerCharacterData(playerid); // Init/Reset Character (v3.2)
         CRP_ResetPlayerContext(playerid);
         CRP_ResetPlayerEvent(playerid);
         CRP_ResetPlayerState(playerid);
@@ -4148,14 +4841,11 @@ public OnGameModeInit()
 
     print("[CRP] Core gamemode berhasil dimuat.");
     print("[CRP] Developer: Muhammad Rizal.");
-    print("[CRP] Core Version: 3.2.");
+    print("[CRP] Core Version: 3.1.");
 
     print("[CRP] Player Identity Foundation aktif.");
     print("[CRP] Player Username Cache aktif.");
     print("[CRP] Player Identity Validation aktif.");
-
-    print("[CRP] Player Character Foundation aktif."); // Added (v3.2)
-    print("[CRP] Player Character Validation & Binding aktif."); // Added (v3.2)
 
     print("[CRP] Player Runtime Data Foundation aktif.");
     print("[CRP] Player Runtime Integrity Validation aktif.");
@@ -4246,139 +4936,72 @@ public OnGameModeInit()
 }
 
 
+// ============================================================
+// GAME MODE EXIT
+// ============================================================
+
 public OnGameModeExit()
 {
     print("[CRP] Core gamemode dihentikan.");
+
     return 1;
 }
 
 
 // ============================================================
-// SA-MP CORE CALLBACK HANDLERS
+// PLAYER CONNECT
 // ============================================================
 
 public OnPlayerConnect(playerid)
 {
     CRP_HandlePlayerConnect(playerid);
+
     return 1;
 }
 
+
+// ============================================================
+// PLAYER DISCONNECT
+// ============================================================
+
 public OnPlayerDisconnect(playerid, reason)
 {
-    CRP_HandlePlayerDisconnect(playerid, reason);
+    CRP_HandlePlayerDisconnect(
+        playerid,
+        reason
+    );
+
     return 1;
 }
+
+
+// ============================================================
+// PLAYER SPAWN
+// ============================================================
 
 public OnPlayerSpawn(playerid)
 {
     CRP_HandlePlayerSpawn(playerid);
-    return 1;
-}
-
-public OnPlayerDeath(playerid, killerid, reason)
-{
-    CRP_HandlePlayerDeath(playerid, killerid, reason);
-    return 1;
-}
-
-public OnPlayerText(playerid, text[])
-{
-    if (!CRP_IsPlayerActive(playerid))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            "ERR: Anda harus masuk ke dalam game untuk mengirim pesan."
-        );
-
-        return 0;
-    }
 
     return 1;
 }
 
-public OnPlayerCommandText(playerid, cmdtext[])
+
+// ============================================================
+// PLAYER DEATH
+// ============================================================
+
+public OnPlayerDeath(
+    playerid,
+    killerid,
+    reason
+)
 {
-    if (!CRP_IsPlayerActive(playerid))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            "ERR: Anda harus masuk ke dalam game untuk menggunakan perintah."
-        );
-
-        return 1;
-    }
-
-    return 0;
-}
-
-public OnPlayerRequestClass(playerid, classid)
-{
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return 0;
-    }
-
-    SetPlayerPos(playerid, 1685.6346, -2242.5151, 13.5469);
-    SetPlayerCameraPos(playerid, 1680.6346, -2242.5151, 13.5469);
-    SetPlayerCameraLookAt(playerid, 1685.6346, -2242.5151, 13.5469);
-
-    return 1;
-}
-
-public OnPlayerRequestSpawn(playerid)
-{
-    if (!CRP_IsPlayerStateAtLeast(playerid, CRP_PLAYER_STATE_CHARACTER))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            "ERR: Anda belum dapat melakukan spawn."
-        );
-
-        return 0;
-    }
-
-    return 1;
-}
-
-public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
-{
-    if (!CRP_IsPlayerActive(playerid))
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-public OnPlayerExitVehicle(playerid, vehicleid)
-{
-    if (!CRP_IsPlayerActive(playerid))
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-public OnPlayerStateChange(playerid, newstate, oldstate)
-{
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-public OnPlayerUpdate(playerid)
-{
-    if (!CRP_IsPlayerConnected(playerid))
-    {
-        return 0;
-    }
+    CRP_HandlePlayerDeath(
+        playerid,
+        killerid,
+        reason
+    );
 
     return 1;
 }
