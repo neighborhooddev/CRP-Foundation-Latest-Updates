@@ -2,7 +2,10 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Activation System v0.3
+// Character Activation System v0.4
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Mengaktifkan character yang dipilih
@@ -10,7 +13,6 @@
 // - Menyimpan character aktif
 // - Menyimpan PRID aktif
 // - Update Last Login
-// - Update Last IP
 // - Update Last Logout saat disconnect
 // - Menjalankan Character Spawn setelah activation berhasil
 //
@@ -28,6 +30,12 @@
 // - PRID tidak berubah saat character aktif.
 // - PRID tidak berubah saat rename.
 // - PRID tidak berubah saat pindah slot.
+//
+// Catatan v0.4:
+// - Memperbaiki signature CallRemoteFunction()
+//   CRP_StorageGetCharacterFullDataRemote.
+// - Signature sekarang mengikuti 19 parameter Storage.
+// - Tidak mengubah dependency terhadap Gamemode.
 // ============================================================
 
 
@@ -413,6 +421,10 @@ stock CRP_LoadActiveCharacterData(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // CHECK CHARACTER EXISTS
+    // --------------------------------------------------------
+
     if (
         !CallRemoteFunction(
             "CRP_StorageCharacterExistsRemote",
@@ -425,6 +437,10 @@ stock CRP_LoadActiveCharacterData(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // INITIALIZE LOCAL BUFFER
+    // --------------------------------------------------------
+
     charactername[0] = EOS;
     origin[0] = EOS;
     gender[0] = EOS;
@@ -436,10 +452,42 @@ stock CRP_LoadActiveCharacterData(
 
     level = 0;
 
+    // --------------------------------------------------------
+    // LOAD FULL CHARACTER DATA
+    //
+    // Storage signature:
+    //
+    // playerid
+    // slot
+    // charactername[]
+    // namesize
+    // &level
+    // origin[]
+    // originsize
+    // gender[]
+    // gendersize
+    // dob[]
+    // dobsize
+    // religion[]
+    // religionsize
+    // lastip[]
+    // ipsize
+    // lastlogin[]
+    // loginsize
+    // lastlogout[]
+    // logoutsize
+    //
+    // Format:
+    //
+    // d d s d d s d s d s d s d s d s d s d
+    //
+    // = "ddsddsdsdsdsdsdsdsd"
+    // --------------------------------------------------------
+
     if (
         !CallRemoteFunction(
             "CRP_StorageGetCharacterFullDataRemote",
-            "ddsdssssssss",
+            "ddsddsdsdsdsdsdsdsd",
             playerid,
             slot,
             charactername,
@@ -465,6 +513,10 @@ stock CRP_LoadActiveCharacterData(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // LOAD PRID
+    // --------------------------------------------------------
+
     prid = CallRemoteFunction(
         "CRP_StorageGetCharacterPRIDRemote",
         "dd",
@@ -479,7 +531,12 @@ stock CRP_LoadActiveCharacterData(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // STORE ACTIVE CHARACTER
+    // --------------------------------------------------------
+
     gActiveCharacterSlot[playerid] = slot;
+
     gActiveCharacterPRID[playerid] = prid;
 
     format(
@@ -577,9 +634,17 @@ stock CRP_ActivateCharacter(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // CLEAR PREVIOUS ACTIVE CHARACTER
+    // --------------------------------------------------------
+
     CRP_ResetActiveCharacter(
         playerid
     );
+
+    // --------------------------------------------------------
+    // LOAD CHARACTER
+    // --------------------------------------------------------
 
     if (
         !CRP_LoadActiveCharacterData(
@@ -600,6 +665,10 @@ stock CRP_ActivateCharacter(
 
         return 0;
     }
+
+    // --------------------------------------------------------
+    // UPDATE LAST LOGIN
+    // --------------------------------------------------------
 
     updated = CallRemoteFunction(
         "CRP_StorageUpdateCharacterLastLoginRemote",
@@ -625,6 +694,14 @@ stock CRP_ActivateCharacter(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // RELOAD CHARACTER DATA
+    //
+    // Tujuan:
+    // Memastikan data lokal mengikuti data terbaru
+    // setelah Last Login diperbarui oleh Storage.
+    // --------------------------------------------------------
+
     if (
         !CRP_LoadActiveCharacterData(
             playerid,
@@ -645,7 +722,15 @@ stock CRP_ActivateCharacter(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // MARK CHARACTER ACTIVE
+    // --------------------------------------------------------
+
     gCharacterActive[playerid] = true;
+
+    // --------------------------------------------------------
+    // SUCCESS MESSAGE
+    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
@@ -680,6 +765,10 @@ stock CRP_ActivateCharacter(
         "[CRP CHARACTER] Character aktif. Menyiapkan Spawn..."
     );
 
+    // --------------------------------------------------------
+    // CHARACTER SPAWN
+    // --------------------------------------------------------
+
     if (
         !CallRemoteFunction(
             "CRP_SpawnActiveCharacterRemote",
@@ -706,7 +795,7 @@ stock CRP_ActivateCharacter(
 //
 // Dipanggil sebelum Active Character di-reset.
 //
-// Yang disimpan:
+// Yang disimpan oleh Storage:
 // - Last Logout
 // - Last IP
 //
@@ -1020,7 +1109,7 @@ forward CRP_GetActiveCharacterLastLoginRemote(
 
 public CRP_GetActiveCharacterLastLoginRemote(
     playerid,
-    lastlogin[],
+    lastlogin,
     size
 )
 {
@@ -1076,11 +1165,10 @@ public OnPlayerConnect(
 // PLAYER DISCONNECT
 //
 // PENTING:
-// Activation harus dimuat SEBELUM Storage.
+// Activation harus memproses Last Logout SEBELUM
+// data active character di-reset.
 //
-// Tujuannya:
-// Last Logout disimpan terlebih dahulu,
-// baru Storage melakukan reset data player.
+// Storage kemudian tetap menjadi sumber data permanen.
 // ============================================================
 
 public OnPlayerDisconnect(
@@ -1112,7 +1200,7 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Activation System v0.3");
+    print(" CRP Character Activation System v0.4");
     print(" Full Character Data Loaded");
     print(" Active Character System Loaded");
     print(" Active PRID System Loaded");
