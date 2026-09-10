@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Character Activation System v0.4
+// Character Activation System v0.5
 //
 // Developer : Muhammad Rizal
 // Project   : Crystal Roleplay
@@ -15,6 +15,7 @@
 // - Update Last Login
 // - Update Last Logout saat disconnect
 // - Menjalankan Character Spawn setelah activation berhasil
+// - Melindungi state dari double activation
 //
 // Character Slot:
 // crp_character_slot.pwn
@@ -31,19 +32,21 @@
 // - PRID tidak berubah saat rename.
 // - PRID tidak berubah saat pindah slot.
 //
-// Catatan v0.4:
-// - Memperbaiki signature CallRemoteFunction()
-//   CRP_StorageGetCharacterFullDataRemote.
-// - Signature sekarang mengikuti 19 parameter Storage.
-// - Tidak mengubah dependency terhadap Gamemode.
+// Catatan v0.5:
+// - Menambahkan validasi player sebelum activation.
+// - Menambahkan perlindungan double activation.
+// - Menambahkan validasi PRID hasil Storage.
+// - Menjaga active state hanya setelah seluruh proses
+//   loading dan Last Login berhasil.
+// - Tidak membuat API Storage baru.
 // ============================================================
 
 
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
 
 #define CHARACTER_SLOT_COUNT 5
 
@@ -164,6 +167,26 @@ stock CRP_ResetActiveCharacter(
     gActiveCharacterLastLogout[playerid][0] = EOS;
 
     gCharacterActive[playerid] = false;
+
+    return 1;
+}
+
+
+// ============================================================
+// VALIDATE CHARACTER SLOT
+// ============================================================
+
+stock CRP_IsValidCharacterSlot(
+    slot
+)
+{
+    if (
+        slot < 0 ||
+        slot >= CHARACTER_SLOT_COUNT
+    )
+    {
+        return 0;
+    }
 
     return 1;
 }
@@ -414,8 +437,14 @@ stock CRP_LoadActiveCharacterData(
     new prid;
 
     if (
-        slot < 0 ||
-        slot >= CHARACTER_SLOT_COUNT
+        !IsPlayerConnected(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if (
+        !CRP_IsValidCharacterSlot(slot)
     )
     {
         return 0;
@@ -508,6 +537,24 @@ stock CRP_LoadActiveCharacterData(
             lastlogout,
             sizeof(lastlogout)
         )
+    )
+    {
+        return 0;
+    }
+
+    // --------------------------------------------------------
+    // BASIC DATA VALIDATION
+    // --------------------------------------------------------
+
+    if (
+        charactername[0] == EOS
+    )
+    {
+        return 0;
+    }
+
+    if (
+        level <= 0
     )
     {
         return 0;
@@ -620,9 +667,29 @@ stock CRP_ActivateCharacter(
         return 0;
     }
 
+    // --------------------------------------------------------
+    // PREVENT DOUBLE ACTIVATION
+    // --------------------------------------------------------
+
     if (
-        slot < 0 ||
-        slot >= CHARACTER_SLOT_COUNT
+        gCharacterActive[playerid]
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP CHARACTER] Character sudah aktif."
+        );
+
+        return 0;
+    }
+
+    // --------------------------------------------------------
+    // VALIDATE SLOT
+    // --------------------------------------------------------
+
+    if (
+        !CRP_IsValidCharacterSlot(slot)
     )
     {
         SendClientMessage(
@@ -635,7 +702,7 @@ stock CRP_ActivateCharacter(
     }
 
     // --------------------------------------------------------
-    // CLEAR PREVIOUS ACTIVE CHARACTER
+    // CLEAR PREVIOUS ACTIVE DATA
     // --------------------------------------------------------
 
     CRP_ResetActiveCharacter(
@@ -698,8 +765,8 @@ stock CRP_ActivateCharacter(
     // RELOAD CHARACTER DATA
     //
     // Tujuan:
-    // Memastikan data lokal mengikuti data terbaru
-    // setelah Last Login diperbarui oleh Storage.
+    // Memastikan cache lokal mengikuti data Storage
+    // setelah Last Login diperbarui.
     // --------------------------------------------------------
 
     if (
@@ -724,6 +791,13 @@ stock CRP_ActivateCharacter(
 
     // --------------------------------------------------------
     // MARK CHARACTER ACTIVE
+    //
+    // Active state baru diberikan setelah:
+    // 1. Character ditemukan.
+    // 2. Full data berhasil dimuat.
+    // 3. PRID valid.
+    // 4. Last Login berhasil diperbarui.
+    // 5. Data berhasil disinkronkan ulang.
     // --------------------------------------------------------
 
     gCharacterActive[playerid] = true;
@@ -822,8 +896,7 @@ stock CRP_PrepareCharacterLogout(
         gActiveCharacterSlot[playerid];
 
     if (
-        slot < 0 ||
-        slot >= CHARACTER_SLOT_COUNT
+        !CRP_IsValidCharacterSlot(slot)
     )
     {
         return 0;
@@ -1109,7 +1182,7 @@ forward CRP_GetActiveCharacterLastLoginRemote(
 
 public CRP_GetActiveCharacterLastLoginRemote(
     playerid,
-    lastlogin,
+    lastlogin[],
     size
 )
 {
@@ -1200,7 +1273,7 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Character Activation System v0.4");
+    print(" CRP Character Activation System v0.5");
     print(" Full Character Data Loaded");
     print(" Active Character System Loaded");
     print(" Active PRID System Loaded");
@@ -1208,6 +1281,7 @@ public OnFilterScriptInit()
     print(" Last IP Integration Loaded");
     print(" Last Logout Integration Loaded");
     print(" Character Spawn Integration Loaded");
+    print(" Activation State Protection Loaded");
     print("---------------------------------------");
 
     return 1;
