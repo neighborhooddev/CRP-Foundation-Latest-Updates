@@ -2,7 +2,10 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Login System v0.2
+// Login System v0.3
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - Login account
@@ -10,6 +13,7 @@
 // - Maksimal 3x kesalahan password
 // - Login berhasil -> Character Slot
 // - Login TextDraw Integration
+// - Login State Management
 //
 // Storage:
 // crp_storage.pwn
@@ -24,15 +28,30 @@
 // CallRemoteFunction()
 // ============================================================
 
+
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREEN     0x33AA33
-#define COLOR_YELLOW    0xFFFF00
-#define COLOR_RED       0xFF3333
-#define COLOR_GREY      0xAAAAAA
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_YELLOW    0xFFFF00FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_GREY      0xAAAAAAFF
+
+
+// ============================================================
+// LOGIN STATE
+// ============================================================
 
 #define LOGIN_STATE_NONE        0
 #define LOGIN_STATE_PASSWORD    1
 #define LOGIN_STATE_SUCCESS     2
+
+
+// ============================================================
+// LOGIN CONFIGURATION
+// ============================================================
 
 #define LOGIN_MAX_ERRORS        3
 #define LOGIN_PASSWORD_MIN      1
@@ -40,8 +59,12 @@
 
 #define DIALOG_LOGIN_PASSWORD   2300
 
-new gLoginState[MAX_PLAYERS];
 
+// ============================================================
+// PLAYER LOGIN DATA
+// ============================================================
+
+new gLoginState[MAX_PLAYERS];
 new gLoginErrorCount[MAX_PLAYERS];
 
 
@@ -78,13 +101,36 @@ forward CRP_ShowCharacterSelectionRemote(
 
 
 // ============================================================
+// PLAYER VALIDATION
+// ============================================================
+
+stock CRP_IsValidLoginPlayer(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
 // RESET LOGIN
 // ============================================================
 
-stock CRP_ResetLogin(
-    playerid
-)
+stock CRP_ResetLogin(playerid)
 {
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
     gLoginState[playerid] =
         LOGIN_STATE_NONE;
 
@@ -96,37 +142,104 @@ stock CRP_ResetLogin(
 
 
 // ============================================================
-// START LOGIN
+// GET LOGIN STATE
 // ============================================================
 
-forward CRP_StartLogin(
-    playerid
-);
-
-public CRP_StartLogin(
-    playerid
-)
+stock CRP_GetLoginState(playerid)
 {
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return LOGIN_STATE_NONE;
+    }
+
+    return gLoginState[playerid];
+}
+
+
+// ============================================================
+// GET LOGIN ERROR COUNT
+// ============================================================
+
+stock CRP_GetLoginErrorCount(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS)
+    {
+        return 0;
+    }
+
+    return gLoginErrorCount[playerid];
+}
+
+
+// ============================================================
+// CHECK WHETHER PLAYER HAS SUCCESSFULLY LOGGED IN
+// ============================================================
+
+stock CRP_IsPlayerLoggedIn(playerid)
+{
+    if (!CRP_IsValidLoginPlayer(playerid))
+    {
+        return 0;
+    }
+
     if (
-        !IsPlayerConnected(playerid)
+        gLoginState[playerid]
+        != LOGIN_STATE_SUCCESS
     )
     {
         return 0;
     }
 
+    return 1;
+}
 
-    CRP_ResetLogin(
-        playerid
-    );
 
+// ============================================================
+// START LOGIN
+// ============================================================
+
+forward CRP_StartLogin(playerid);
+
+public CRP_StartLogin(playerid)
+{
+    if (!CRP_IsValidLoginPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // JIKA SUDAH LOGIN
+    // --------------------------------------------------------
+
+    if (
+        gLoginState[playerid]
+        == LOGIN_STATE_SUCCESS
+    )
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP LOGIN] Account kamu sudah login."
+        );
+
+        return 1;
+    }
+
+
+    // --------------------------------------------------------
+    // RESET SESSION LOGIN
+    // --------------------------------------------------------
+
+    CRP_ResetLogin(playerid);
 
     gLoginState[playerid] =
         LOGIN_STATE_PASSWORD;
 
 
-    // ========================================================
+    // --------------------------------------------------------
     // TAMPILKAN LOGIN TEXTDRAW
-    // ========================================================
+    // --------------------------------------------------------
 
     CallRemoteFunction(
         "CRP_ShowLoginUIRemote",
@@ -135,19 +248,21 @@ public CRP_StartLogin(
     );
 
 
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
+
     SendClientMessage(
         playerid,
         COLOR_GREEN,
         "[CRP LOGIN] Account ditemukan."
     );
 
-
     SendClientMessage(
         playerid,
         COLOR_WHITE,
         "[CRP LOGIN] Silakan klik LOGIN untuk melanjutkan."
     );
-
 
     return 1;
 }
@@ -165,6 +280,20 @@ stock CRP_LoginPassword(
     new verified;
 
 
+    // --------------------------------------------------------
+    // PLAYER VALIDATION
+    // --------------------------------------------------------
+
+    if (!CRP_IsValidLoginPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // LOGIN STATE VALIDATION
+    // --------------------------------------------------------
+
     if (
         gLoginState[playerid]
         != LOGIN_STATE_PASSWORD
@@ -173,6 +302,10 @@ stock CRP_LoginPassword(
         return 0;
     }
 
+
+    // --------------------------------------------------------
+    // PASSWORD MINIMUM
+    // --------------------------------------------------------
 
     if (
         strlen(password)
@@ -188,6 +321,10 @@ stock CRP_LoginPassword(
         return 0;
     }
 
+
+    // --------------------------------------------------------
+    // PASSWORD MAXIMUM
+    // --------------------------------------------------------
 
     if (
         strlen(password)
@@ -225,6 +362,10 @@ stock CRP_LoginPassword(
         gLoginErrorCount[playerid]++;
 
 
+        // ----------------------------------------------------
+        // BATAS 3 KALI
+        // ----------------------------------------------------
+
         if (
             gLoginErrorCount[playerid]
             >= LOGIN_MAX_ERRORS
@@ -243,22 +384,20 @@ stock CRP_LoginPassword(
             );
 
 
-            CRP_ResetLogin(
-                playerid
-            );
+            CRP_ResetLogin(playerid);
 
-
-            Kick(
-                playerid
-            );
+            Kick(playerid);
 
             return 0;
         }
 
 
+        // ----------------------------------------------------
+        // HITUNG KESEMPATAN
+        // ----------------------------------------------------
+
         new remaining;
         new message[144];
-
 
         remaining =
             LOGIN_MAX_ERRORS
@@ -282,6 +421,10 @@ stock CRP_LoginPassword(
         );
 
 
+        // ----------------------------------------------------
+        // PASSWORD DIALOG ULANG
+        // ----------------------------------------------------
+
         ShowPlayerDialog(
             playerid,
             DIALOG_LOGIN_PASSWORD,
@@ -292,18 +435,25 @@ stock CRP_LoginPassword(
             "KELUAR"
         );
 
-
         return 0;
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PASSWORD BENAR
-    // --------------------------------------------------------
+    // ========================================================
 
     gLoginState[playerid] =
         LOGIN_STATE_SUCCESS;
 
+
+    // Reset counter setelah berhasil.
+    gLoginErrorCount[playerid] = 0;
+
+
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
@@ -311,13 +461,11 @@ stock CRP_LoginPassword(
         "[CRP LOGIN] Password benar."
     );
 
-
     SendClientMessage(
         playerid,
         COLOR_GREEN,
         "[CRP LOGIN] Account berhasil login."
     );
-
 
     SendClientMessage(
         playerid,
@@ -374,6 +522,16 @@ public OnDialogResponse(
 
 
     // --------------------------------------------------------
+    // PLAYER VALIDATION
+    // --------------------------------------------------------
+
+    if (!CRP_IsValidLoginPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
     // KELUAR
     // --------------------------------------------------------
 
@@ -386,15 +544,9 @@ public OnDialogResponse(
         );
 
 
-        CRP_ResetLogin(
-            playerid
-        );
+        CRP_ResetLogin(playerid);
 
-
-        Kick(
-            playerid
-        );
-
+        Kick(playerid);
 
         return 1;
     }
@@ -409,7 +561,6 @@ public OnDialogResponse(
         inputtext
     );
 
-
     return 1;
 }
 
@@ -418,13 +569,9 @@ public OnDialogResponse(
 // PLAYER CONNECT
 // ============================================================
 
-public OnPlayerConnect(
-    playerid
-)
+public OnPlayerConnect(playerid)
 {
-    CRP_ResetLogin(
-        playerid
-    );
+    CRP_ResetLogin(playerid);
 
     return 1;
 }
@@ -439,9 +586,7 @@ public OnPlayerDisconnect(
     reason
 )
 {
-    CRP_ResetLogin(
-        playerid
-    );
+    CRP_ResetLogin(playerid);
 
     return 1;
 }
@@ -454,7 +599,7 @@ public OnPlayerDisconnect(
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Login System v0.2");
+    print(" CRP Login System v0.3");
     print(" Account Password Verification Loaded");
     print(" Maximum Login Error: 3");
     print(" Login TextDraw Integration Loaded");
