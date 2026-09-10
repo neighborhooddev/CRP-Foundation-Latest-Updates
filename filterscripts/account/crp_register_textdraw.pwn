@@ -2,7 +2,10 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Register TextDraw System v0.4
+// Register TextDraw System v0.5
+//
+// Developer : Muhammad Rizal
+// Project   : Crystal Roleplay
 //
 // Fungsi:
 // - UI Register
@@ -13,6 +16,7 @@
 // - Dialog Email 1/2
 // - Dialog Email 2/2
 // - UI Register hanya ditampilkan ketika dipanggil
+// - Sinkronisasi dengan Register System v0.6
 //
 // Logic:
 // crp_register.pwn
@@ -24,11 +28,17 @@
 // CallRemoteFunction()
 // ============================================================
 
+
+// ============================================================
+// COLOR
+// ============================================================
+
 #define COLOR_WHITE     0xFFFFFFFF
-#define COLOR_GREY      0xAAAAAA
-#define COLOR_GREEN     0x33AA33
-#define COLOR_RED       0xFF3333
-#define COLOR_YELLOW    0xFFFF00
+#define COLOR_GREY      0xAAAAAAFF
+#define COLOR_GREEN     0x33AA33FF
+#define COLOR_RED       0xFF3333FF
+#define COLOR_YELLOW    0xFFFF00FF
+
 
 // ============================================================
 // DIALOG ID
@@ -38,6 +48,7 @@
 #define DIALOG_REGISTER_PASSWORD_2    2101
 #define DIALOG_REGISTER_EMAIL_1       2102
 #define DIALOG_REGISTER_EMAIL_2       2103
+
 
 // ============================================================
 // TEXTDRAW ID
@@ -51,6 +62,11 @@
 #define TD_BUTTON_CANCEL    5
 
 #define REGISTER_TD_COUNT   6
+
+
+// ============================================================
+// PLAYER TEXTDRAW DATA
+// ============================================================
 
 new PlayerText:gRegisterTD[MAX_PLAYERS][REGISTER_TD_COUNT];
 
@@ -83,14 +99,43 @@ forward CRP_RegisterEmail2(
 
 
 // ============================================================
-// CREATE TEXTDRAW
+// PLAYER VALIDATION
+// ============================================================
+
+stock CRP_IsValidRegisterUIPlayer(playerid)
+{
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// CREATE REGISTER TEXTDRAW
 // ============================================================
 
 stock CRP_CreateRegisterTextDraw(playerid)
 {
-    // --------------------------------------------------------
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // ========================================================
     // BACKGROUND
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_BACKGROUND] =
         CreatePlayerTextDraw(
@@ -139,9 +184,9 @@ stock CRP_CreateRegisterTextDraw(playerid)
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // TITLE
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_TITLE] =
         CreatePlayerTextDraw(
@@ -183,9 +228,9 @@ stock CRP_CreateRegisterTextDraw(playerid)
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // BODY
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_BODY] =
         CreatePlayerTextDraw(
@@ -227,9 +272,9 @@ stock CRP_CreateRegisterTextDraw(playerid)
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // INFO
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_INFO] =
         CreatePlayerTextDraw(
@@ -271,9 +316,9 @@ stock CRP_CreateRegisterTextDraw(playerid)
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // REGISTER BUTTON
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_BUTTON_REGISTER] =
         CreatePlayerTextDraw(
@@ -321,9 +366,9 @@ stock CRP_CreateRegisterTextDraw(playerid)
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CANCEL BUTTON
-    // --------------------------------------------------------
+    // ========================================================
 
     gRegisterTD[playerid][TD_BUTTON_CANCEL] =
         CreatePlayerTextDraw(
@@ -375,11 +420,16 @@ stock CRP_CreateRegisterTextDraw(playerid)
 
 
 // ============================================================
-// SHOW UI
+// SHOW REGISTER UI
 // ============================================================
 
 stock CRP_ShowRegisterUI(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     for (
         new i = 0;
         i < REGISTER_TD_COUNT;
@@ -402,30 +452,33 @@ stock CRP_ShowRegisterUI(playerid)
 
 
 // ============================================================
-// REMOTE SHOW UI
+// REMOTE SHOW REGISTER UI
 // ============================================================
 
 forward CRP_ShowRegisterUIRemote(playerid);
 
 public CRP_ShowRegisterUIRemote(playerid)
 {
-    if (!IsPlayerConnected(playerid))
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
     {
         return 0;
     }
 
-    CRP_ShowRegisterUI(playerid);
-
-    return 1;
+    return CRP_ShowRegisterUI(playerid);
 }
 
 
 // ============================================================
-// HIDE UI
+// HIDE REGISTER UI
 // ============================================================
 
 stock CRP_HideRegisterUI(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     for (
         new i = 0;
         i < REGISTER_TD_COUNT;
@@ -450,6 +503,11 @@ stock CRP_HideRegisterUI(playerid)
 
 stock CRP_ShowRegisterPassword1(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     CRP_HideRegisterUI(playerid);
 
     ShowPlayerDialog(
@@ -472,6 +530,11 @@ stock CRP_ShowRegisterPassword1(playerid)
 
 stock CRP_ShowRegisterPassword2(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     CRP_HideRegisterUI(playerid);
 
     ShowPlayerDialog(
@@ -494,6 +557,11 @@ stock CRP_ShowRegisterPassword2(playerid)
 
 stock CRP_ShowRegisterEmail1(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     CRP_HideRegisterUI(playerid);
 
     ShowPlayerDialog(
@@ -516,6 +584,11 @@ stock CRP_ShowRegisterEmail1(playerid)
 
 stock CRP_ShowRegisterEmail2(playerid)
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     CRP_HideRegisterUI(playerid);
 
     ShowPlayerDialog(
@@ -533,7 +606,7 @@ stock CRP_ShowRegisterEmail2(playerid)
 
 
 // ============================================================
-// CONNECT
+// PLAYER CONNECT
 // ============================================================
 
 public OnPlayerConnect(playerid)
@@ -545,7 +618,7 @@ public OnPlayerConnect(playerid)
 
 
 // ============================================================
-// DISCONNECT
+// PLAYER DISCONNECT
 // ============================================================
 
 public OnPlayerDisconnect(
@@ -553,6 +626,14 @@ public OnPlayerDisconnect(
     reason
 )
 {
+    if (
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 1;
+    }
+
     for (
         new i = 0;
         i < REGISTER_TD_COUNT;
@@ -578,16 +659,28 @@ public OnPlayerClickPlayerTextDraw(
     PlayerText:playertextid
 )
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
+
+    // --------------------------------------------------------
+    // REGISTER
+    // --------------------------------------------------------
+
     if (
         playertextid
         == gRegisterTD[playerid][TD_BUTTON_REGISTER]
     )
     {
-        CRP_ShowRegisterPassword1(playerid);
-
-        return 1;
+        return CRP_ShowRegisterPassword1(playerid);
     }
 
+
+    // --------------------------------------------------------
+    // BATAL
+    // --------------------------------------------------------
 
     if (
         playertextid
@@ -595,6 +688,12 @@ public OnPlayerClickPlayerTextDraw(
     )
     {
         CancelSelectTextDraw(playerid);
+
+        SendClientMessage(
+            playerid,
+            COLOR_YELLOW,
+            "[CRP REGISTER] Pendaftaran dibatalkan."
+        );
 
         Kick(playerid);
 
@@ -617,12 +716,17 @@ public OnDialogResponse(
     inputtext[]
 )
 {
+    if (!CRP_IsValidRegisterUIPlayer(playerid))
+    {
+        return 0;
+    }
+
     new result;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PASSWORD 1
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
         dialogid
@@ -656,9 +760,9 @@ public OnDialogResponse(
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PASSWORD 2
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
         dialogid
@@ -692,9 +796,9 @@ public OnDialogResponse(
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // EMAIL 1
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
         dialogid
@@ -728,9 +832,9 @@ public OnDialogResponse(
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // EMAIL 2
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
         dialogid
@@ -768,15 +872,16 @@ public OnDialogResponse(
 
 
 // ============================================================
-// INIT
+// FILTERSCRIPT INIT
 // ============================================================
 
 public OnFilterScriptInit()
 {
     print("---------------------------------------");
-    print(" CRP Register TextDraw System v0.4");
+    print(" CRP Register TextDraw System v0.5");
     print(" Register UI Loaded");
-    print(" Manual UI Trigger Enabled");
+    print(" Password Dialog Integration Loaded");
+    print(" Email Dialog Integration Loaded");
     print(" Remote Interface Connected");
     print("---------------------------------------");
 
@@ -785,7 +890,7 @@ public OnFilterScriptInit()
 
 
 // ============================================================
-// EXIT
+// FILTERSCRIPT EXIT
 // ============================================================
 
 public OnFilterScriptExit()
