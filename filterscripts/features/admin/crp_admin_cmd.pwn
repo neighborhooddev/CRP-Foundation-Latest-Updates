@@ -113,7 +113,6 @@ public OnFilterScriptInit()
 public OnFilterScriptExit()
 {
     print("Crystal Roleplay - Admin Commands System unloaded.");
-
     return 1;
 }
 
@@ -584,14 +583,12 @@ stock CRP_AdminFindVehicle(
     new token[32];
     new vehicleid;
 
-    if(
-        CRP_AdminGetToken(
-            params,
-            0,
-            token,
-            sizeof(token)
-        )
-    )
+    if(CRP_AdminGetToken(
+        params,
+        0,
+        token,
+        sizeof(token)
+    ))
     {
         if(CRP_IsNumeric(token))
         {
@@ -633,6 +630,7 @@ stock CRP_AdminFindVehicle(
 // - CRP_AdminInspectAInspectRemote
 //
 // Permission tetap ditangani oleh command layer.
+// Inspection logic tetap berada di backend.
 // ============================================================
 
 stock CRP_AdminInspect_Check(
@@ -1253,10 +1251,17 @@ stock CRP_AdminCommand_Check(
         return 1;
     }
 
-    CRP_AdminInspect_Check(
+    if(!CRP_AdminInspect_Check(
         playerid,
         targetid
-    );
+    ))
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "AdminCmd: /check gagal dijalankan."
+        );
+    }
 
     return 1;
 }
@@ -1313,10 +1318,17 @@ stock CRP_AdminCommand_AInspect(
         return 1;
     }
 
-    CRP_AdminInspect_AInspect(
+    if(!CRP_AdminInspect_AInspect(
         playerid,
         targetid
-    );
+    ))
+    {
+        SendClientMessage(
+            playerid,
+            COLOR_RED,
+            "AdminCmd: /ainspect gagal dijalankan."
+        );
+    }
 
     return 1;
 }
@@ -2065,7 +2077,7 @@ stock CRP_AdminCommand_CharRemove(
 
 
 // ============================================================
-// /KICK
+// ADMIN ACTION COMMANDS
 // R2+ + DUTY
 // ============================================================
 
@@ -2074,45 +2086,25 @@ stock CRP_AdminCommand_Kick(
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new targetToken[32];
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            1,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, targetToken, sizeof(targetToken)) ||
+        !CRP_AdminGetRest(params, 1, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /kick [ID] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /kick [ID] [reason]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(targetToken);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Kick(
@@ -2125,54 +2117,30 @@ stock CRP_AdminCommand_Kick(
 }
 
 
-// ============================================================
-// /BAN
-// ============================================================
-
 stock CRP_AdminCommand_Ban(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new targetToken[32];
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            1,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, targetToken, sizeof(targetToken)) ||
+        !CRP_AdminGetRest(params, 1, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /ban [ID] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /ban [ID] [reason]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(targetToken);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Ban(
@@ -2185,45 +2153,24 @@ stock CRP_AdminCommand_Ban(
 }
 
 
-// ============================================================
-// /OBAN
-// ============================================================
-
 stock CRP_AdminCommand_OBan(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new character[64];
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            character,
-            sizeof(character)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            1,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, character, sizeof(character)) ||
+        !CRP_AdminGetRest(params, 1, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /oban [Firstname_Lastname] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /oban [Firstname_Lastname] [reason]");
         return 1;
     }
 
@@ -2237,19 +2184,12 @@ stock CRP_AdminCommand_OBan(
 }
 
 
-// ============================================================
-// /UNBAN
-// ============================================================
-
 stock CRP_AdminCommand_Unban(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new character[64];
@@ -2261,12 +2201,8 @@ stock CRP_AdminCommand_Unban(
         sizeof(character)
     ))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unban [Firstname_Lastname]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /unban [Firstname_Lastname]");
         return 1;
     }
 
@@ -2279,45 +2215,26 @@ stock CRP_AdminCommand_Unban(
 }
 
 
-// ============================================================
-// /MUTE
-// ============================================================
-
 stock CRP_AdminCommand_Mute(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new token[32];
 
-    if(!CRP_AdminGetToken(
-        params,
-        0,
-        token,
-        sizeof(token)
-    ))
+    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /mute [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /mute [ID]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(token);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Mute(
@@ -2329,45 +2246,26 @@ stock CRP_AdminCommand_Mute(
 }
 
 
-// ============================================================
-// /UNMUTE
-// ============================================================
-
 stock CRP_AdminCommand_Unmute(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new token[32];
 
-    if(!CRP_AdminGetToken(
-        params,
-        0,
-        token,
-        sizeof(token)
-    ))
+    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unmute [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /unmute [ID]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(token);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Unmute(
@@ -2379,54 +2277,30 @@ stock CRP_AdminCommand_Unmute(
 }
 
 
-// ============================================================
-// /WARN
-// ============================================================
-
 stock CRP_AdminCommand_Warn(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new targetToken[32];
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            1,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, targetToken, sizeof(targetToken)) ||
+        !CRP_AdminGetRest(params, 1, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /warn [ID] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /warn [ID] [reason]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(targetToken);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Warn(
@@ -2439,45 +2313,26 @@ stock CRP_AdminCommand_Warn(
 }
 
 
-// ============================================================
-// /UNWARN
-// ============================================================
-
 stock CRP_AdminCommand_Unwarn(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new token[32];
 
-    if(!CRP_AdminGetToken(
-        params,
-        0,
-        token,
-        sizeof(token)
-    ))
+    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unwarn [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /unwarn [ID]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(token);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Unwarn(
@@ -2489,19 +2344,12 @@ stock CRP_AdminCommand_Unwarn(
 }
 
 
-// ============================================================
-// /JAIL
-// ============================================================
-
 stock CRP_AdminCommand_Jail(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new targetToken[32];
@@ -2509,43 +2357,20 @@ stock CRP_AdminCommand_Jail(
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetToken(
-            params,
-            1,
-            minuteToken,
-            sizeof(minuteToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            2,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, targetToken, sizeof(targetToken)) ||
+        !CRP_AdminGetToken(params, 1, minuteToken, sizeof(minuteToken)) ||
+        !CRP_AdminGetRest(params, 2, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /jail [ID] [minutes] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /jail [ID] [minutes] [reason]");
         return 1;
     }
 
     if(!CRP_IsNumeric(minuteToken))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi jail harus berupa angka."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi jail harus berupa angka.");
         return 1;
     }
 
@@ -2553,21 +2378,14 @@ stock CRP_AdminCommand_Jail(
 
     if(minutes <= 0)
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi jail harus lebih dari 0 menit."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi jail harus lebih dari 0 menit.");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(targetToken);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Jail(
@@ -2581,19 +2399,12 @@ stock CRP_AdminCommand_Jail(
 }
 
 
-// ============================================================
-// /OJAIL
-// ============================================================
-
 stock CRP_AdminCommand_OJail(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new character[64];
@@ -2601,43 +2412,20 @@ stock CRP_AdminCommand_OJail(
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            character,
-            sizeof(character)
-        ) ||
-        !CRP_AdminGetToken(
-            params,
-            1,
-            minuteToken,
-            sizeof(minuteToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            2,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, character, sizeof(character)) ||
+        !CRP_AdminGetToken(params, 1, minuteToken, sizeof(minuteToken)) ||
+        !CRP_AdminGetRest(params, 2, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /ojail [Firstname_Lastname] [minutes] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /ojail [Firstname_Lastname] [minutes] [reason]");
         return 1;
     }
 
     if(!CRP_IsNumeric(minuteToken))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi jail harus berupa angka."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi jail harus berupa angka.");
         return 1;
     }
 
@@ -2645,12 +2433,8 @@ stock CRP_AdminCommand_OJail(
 
     if(minutes <= 0)
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi jail harus lebih dari 0 menit."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi jail harus lebih dari 0 menit.");
         return 1;
     }
 
@@ -2665,45 +2449,26 @@ stock CRP_AdminCommand_OJail(
 }
 
 
-// ============================================================
-// /UNJAIL
-// ============================================================
-
 stock CRP_AdminCommand_Unjail(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new token[32];
 
-    if(!CRP_AdminGetToken(
-        params,
-        0,
-        token,
-        sizeof(token)
-    ))
+    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unjail [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /unjail [ID]");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(token);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_Unjail(
@@ -2715,19 +2480,12 @@ stock CRP_AdminCommand_Unjail(
 }
 
 
-// ============================================================
-// /TBAN
-// ============================================================
-
 stock CRP_AdminCommand_TBan(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new targetToken[32];
@@ -2735,43 +2493,20 @@ stock CRP_AdminCommand_TBan(
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetToken(
-            params,
-            1,
-            minuteToken,
-            sizeof(minuteToken)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            2,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, targetToken, sizeof(targetToken)) ||
+        !CRP_AdminGetToken(params, 1, minuteToken, sizeof(minuteToken)) ||
+        !CRP_AdminGetRest(params, 2, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /tban [ID] [minutes] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /tban [ID] [minutes] [reason]");
         return 1;
     }
 
     if(!CRP_IsNumeric(minuteToken))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi ban harus berupa angka."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi ban harus berupa angka.");
         return 1;
     }
 
@@ -2779,21 +2514,14 @@ stock CRP_AdminCommand_TBan(
 
     if(minutes <= 0)
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Durasi ban harus lebih dari 0 menit."
-        );
-
+        SendClientMessage(playerid, COLOR_RED,
+            "AdminCmd: Durasi ban harus lebih dari 0 menit.");
         return 1;
     }
 
     new targetid = CRP_AdminFindPlayer(targetToken);
 
-    if(!CRP_AdminRequireTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
     CRP_AdminAction_TBan(
@@ -2807,45 +2535,24 @@ stock CRP_AdminCommand_TBan(
 }
 
 
-// ============================================================
-// /BLOCKUSER
-// ============================================================
-
 stock CRP_AdminCommand_BlockUser(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new username[64];
     new reason[CRP_ADMIN_MAX_REASON];
 
     if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            username,
-            sizeof(username)
-        ) ||
-        !CRP_AdminGetRest(
-            params,
-            1,
-            reason,
-            sizeof(reason)
-        )
+        !CRP_AdminGetToken(params, 0, username, sizeof(username)) ||
+        !CRP_AdminGetRest(params, 1, reason, sizeof(reason))
     )
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /blockuser [AccountUsername] [reason]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /blockuser [AccountUsername] [reason]");
         return 1;
     }
 
@@ -2859,19 +2566,12 @@ stock CRP_AdminCommand_BlockUser(
 }
 
 
-// ============================================================
-// /UNBLOCK
-// ============================================================
-
 stock CRP_AdminCommand_Unblock(
     playerid,
     const params[]
 )
 {
-    if(!CRP_AdminRequireDuty(
-        playerid,
-        ADMIN_HELPER
-    ))
+    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
         return 1;
 
     new username[64];
@@ -2883,12 +2583,8 @@ stock CRP_AdminCommand_Unblock(
         sizeof(username)
     ))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unblock [AccountUsername]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW,
+            "USAGE: /unblock [AccountUsername]");
         return 1;
     }
 
