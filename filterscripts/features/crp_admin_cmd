@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Admin Commands System v1.0
+// Admin Commands System v1.1
 //
 // File:
 // filterscripts/features/crp_admin_cmd.pwn
@@ -19,13 +19,17 @@
 // - Target hierarchy protection
 // - Admin duty validation
 // - Admin command routing
+// - /asks command entry point
 //
 // CATATAN:
 // - Admin Panel tetap dimiliki crp_admin.pwn
-// - Persistent logs tetap dimiliki crp_admin_logs.pwn
+// - ASK Foundation tetap dimiliki crp_admin.pwn
+// - AskBot tetap dimiliki crp_admin.pwn
+// - Persistent ASK logs tetap dimiliki crp_admin.pwn
 // - Money Settings TIDAK dibuat sebagai command
 // - /eject bukan admin command
 // - Developer tidak dapat ditargetkan admin lain
+// - /asks dapat digunakan R1+
 // ============================================================
 
 
@@ -69,16 +73,6 @@
 
 
 // ============================================================
-// RUNTIME DUTY
-//
-// Command layer keeps its own duty state for now.
-// This can later be bridged directly to crp_admin.pwn.
-// ============================================================
-
-static bool:gAdminDuty[MAX_PLAYERS];
-
-
-// ============================================================
 // COMMAND TEXT BUFFER
 // ============================================================
 
@@ -103,14 +97,10 @@ forward CRP_AdminOpenMyBansUCP(playerid);
 public OnFilterScriptInit()
 {
     print("============================================================");
-    print("Crystal Roleplay - Admin Commands System v1.0");
+    print("Crystal Roleplay - Admin Commands System v1.1");
     print("Command layer initialized.");
+    print("ASK command available for R1+.");
     print("============================================================");
-
-    for(new playerid = 0; playerid < MAX_PLAYERS; playerid++)
-    {
-        gAdminDuty[playerid] = false;
-    }
 
     return 1;
 }
@@ -119,30 +109,6 @@ public OnFilterScriptInit()
 public OnFilterScriptExit()
 {
     print("Crystal Roleplay - Admin Commands System unloaded.");
-
-    return 1;
-}
-
-
-// ============================================================
-// PLAYER CONNECT
-// ============================================================
-
-public OnPlayerConnect(playerid)
-{
-    gAdminDuty[playerid] = false;
-
-    return 1;
-}
-
-
-// ============================================================
-// PLAYER DISCONNECT
-// ============================================================
-
-public OnPlayerDisconnect(playerid, reason)
-{
-    gAdminDuty[playerid] = false;
 
     return 1;
 }
@@ -251,19 +217,31 @@ stock CRP_AdminGetAccountUsername(playerid, output[], size = 64)
 
 // ============================================================
 // ADMIN DUTY
+//
+// Single source of truth:
+// - crp_admin.pwn
+//
+// Command layer tidak lagi menyimpan state duty sendiri.
 // ============================================================
 
 stock bool:CRP_AdminIsOnDuty(playerid)
 {
-    return gAdminDuty[playerid];
+    return bool:CallRemoteFunction(
+        "CRP_AdminIsOnDutyRemote",
+        "i",
+        playerid
+    );
 }
 
 
 stock CRP_AdminSetDuty(playerid, bool:state)
 {
-    gAdminDuty[playerid] = state;
-
-    return 1;
+    return CallRemoteFunction(
+        "CRP_AdminSetDutyRemote",
+        "ii",
+        playerid,
+        _:state
+    );
 }
 
 
@@ -565,6 +543,34 @@ stock CRP_AdminCommand_AP(playerid)
 
 
 // ============================================================
+// /ASKS
+//
+// Permission:
+// R1+
+// Intern sudah dapat membuka ASK Panel.
+//
+// ASK Foundation / AskBot / Storage / Logs:
+// Tetap dimiliki crp_admin.pwn.
+//
+// Command layer hanya memanggil API panel.
+// ============================================================
+
+stock CRP_AdminCommand_Asks(playerid)
+{
+    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
+        return 1;
+
+    CallRemoteFunction(
+        "CRP_AdminOpenAskPanel",
+        "i",
+        playerid
+    );
+
+    return 1;
+}
+
+
+// ============================================================
 // /A
 // ============================================================
 
@@ -648,7 +654,7 @@ stock CRP_AdminCommand_AHelp(playerid)
     SendClientMessage(
         playerid,
         COLOR_WHITE,
-        "/ap /a /ahelp /admins"
+        "/ap /asks /a /ahelp /admins"
     );
 
     if(rank >= ADMIN_HELPER)
@@ -778,7 +784,7 @@ stock CRP_AdminCommand_Admins(playerid)
             "%s - Rank %d - %s",
             name,
             rank,
-            gAdminDuty[i] ? ("ON DUTY") : ("OFF DUTY")
+            CRP_AdminIsOnDuty(i) ? ("ON DUTY") : ("OFF DUTY")
         );
 
         SendClientMessage(
@@ -801,7 +807,7 @@ stock CRP_AdminCommand_AOn(playerid)
     if(!CRP_AdminRequireStaff(playerid, ADMIN_HELPER))
         return 1;
 
-    if(gAdminDuty[playerid])
+    if(CRP_AdminIsOnDuty(playerid))
     {
         SendClientMessage(
             playerid,
@@ -812,7 +818,7 @@ stock CRP_AdminCommand_AOn(playerid)
         return 1;
     }
 
-    gAdminDuty[playerid] = true;
+    CRP_AdminSetDuty(playerid, true);
 
     SendClientMessage(
         playerid,
@@ -839,7 +845,7 @@ stock CRP_AdminCommand_AOff(playerid)
     if(!CRP_AdminRequireStaff(playerid, ADMIN_HELPER))
         return 1;
 
-    if(!gAdminDuty[playerid])
+    if(!CRP_AdminIsOnDuty(playerid))
     {
         SendClientMessage(
             playerid,
@@ -850,7 +856,7 @@ stock CRP_AdminCommand_AOff(playerid)
         return 1;
     }
 
-    gAdminDuty[playerid] = false;
+    CRP_AdminSetDuty(playerid, false);
 
     SendClientMessage(
         playerid,
@@ -881,12 +887,7 @@ stock CRP_AdminCommand_Check(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /check [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /check [ID]");
         return 1;
     }
 
@@ -895,13 +896,7 @@ stock CRP_AdminCommand_Check(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheck",
-        "ii",
-        playerid,
-        targetid
-    );
-
+    CallRemoteFunction("CRP_AdminCommandCheck", "ii", playerid, targetid);
     CRP_AdminWriteLog(playerid, "check", token);
 
     return 1;
@@ -917,12 +912,7 @@ stock CRP_AdminCommand_AInspect(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /ainspect [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /ainspect [ID]");
         return 1;
     }
 
@@ -931,13 +921,7 @@ stock CRP_AdminCommand_AInspect(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandAInspect",
-        "ii",
-        playerid,
-        targetid
-    );
-
+    CallRemoteFunction("CRP_AdminCommandAInspect", "ii", playerid, targetid);
     CRP_AdminWriteLog(playerid, "ainspect", token);
 
     return 1;
@@ -953,12 +937,7 @@ stock CRP_AdminCommand_CheckGun(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /checkgun [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /checkgun [ID]");
         return 1;
     }
 
@@ -967,12 +946,7 @@ stock CRP_AdminCommand_CheckGun(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckGun",
-        "ii",
-        playerid,
-        targetid
-    );
+    CallRemoteFunction("CRP_AdminCommandCheckGun", "ii", playerid, targetid);
 
     return 1;
 }
@@ -987,12 +961,7 @@ stock CRP_AdminCommand_CheckWeapons(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /checkweapons [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /checkweapons [ID]");
         return 1;
     }
 
@@ -1001,12 +970,7 @@ stock CRP_AdminCommand_CheckWeapons(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckWeapons",
-        "ii",
-        playerid,
-        targetid
-    );
+    CallRemoteFunction("CRP_AdminCommandCheckWeapons", "ii", playerid, targetid);
 
     return 1;
 }
@@ -1021,12 +985,7 @@ stock CRP_AdminCommand_CheckWarn(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /checkwarn [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /checkwarn [ID]");
         return 1;
     }
 
@@ -1035,12 +994,7 @@ stock CRP_AdminCommand_CheckWarn(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckWarn",
-        "ii",
-        playerid,
-        targetid
-    );
+    CallRemoteFunction("CRP_AdminCommandCheckWarn", "ii", playerid, targetid);
 
     return 1;
 }
@@ -1055,12 +1009,7 @@ stock CRP_AdminCommand_CheckJail(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /checkjail [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /checkjail [ID]");
         return 1;
     }
 
@@ -1069,12 +1018,7 @@ stock CRP_AdminCommand_CheckJail(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckJail",
-        "ii",
-        playerid,
-        targetid
-    );
+    CallRemoteFunction("CRP_AdminCommandCheckJail", "ii", playerid, targetid);
 
     return 1;
 }
@@ -1089,12 +1033,7 @@ stock CRP_AdminCommand_CheckVeh(playerid, const params[])
 
     if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /checkveh [ID]"
-        );
-
+        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /checkveh [ID]");
         return 1;
     }
 
@@ -1103,12 +1042,7 @@ stock CRP_AdminCommand_CheckVeh(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckVeh",
-        "ii",
-        playerid,
-        targetid
-    );
+    CallRemoteFunction("CRP_AdminCommandCheckVeh", "ii", playerid, targetid);
 
     return 1;
 }
@@ -1136,13 +1070,7 @@ stock CRP_AdminCommand_Goto(playerid, const params[])
     if(!CRP_AdminRequireTarget(playerid, targetid))
         return 1;
 
-    CallRemoteFunction(
-        "CRP_AdminCommandGoto",
-        "ii",
-        playerid,
-        targetid
-    );
-
+    CallRemoteFunction("CRP_AdminCommandGoto", "ii", playerid, targetid);
     CRP_AdminWriteLog(playerid, "goto", token);
 
     return 1;
@@ -1162,2039 +1090,4 @@ stock CRP_AdminCommand_GetHere(playerid, const params[])
         return 1;
     }
 
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetHere",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    CRP_AdminWriteLog(playerid, "gethere", token);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_P2P(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new first[32], second[32];
-
-    if(!CRP_AdminGetToken(params, 0, first, sizeof(first)) ||
-       !CRP_AdminGetToken(params, 1, second, sizeof(second)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /p2p [ID] [ID]");
-        return 1;
-    }
-
-    new target1 = CRP_AdminFindPlayer(first);
-    new target2 = CRP_AdminFindPlayer(second);
-
-    if(!CRP_AdminRequireTarget(playerid, target1))
-        return 1;
-
-    if(!CRP_AdminRequireTarget(playerid, target2))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandP2P",
-        "iii",
-        playerid,
-        target1,
-        target2
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SendToLS(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /sendtols [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSendToLS",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// MARK / GOTOMARK / POSITION
-// ============================================================
-
-stock CRP_AdminCommand_Mark(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandMark",
-        "i",
-        playerid
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GREEN,
-        "AdminCmd: Position berhasil ditandai."
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GotoMark(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGotoMark",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GetPos(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetPos",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GotoPos(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new xString[32];
-    new yString[32];
-    new zString[32];
-
-    if(!CRP_AdminGetToken(params, 0, xString, sizeof(xString)) ||
-       !CRP_AdminGetToken(params, 1, yString, sizeof(yString)) ||
-       !CRP_AdminGetToken(params, 2, zString, sizeof(zString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /gotopos [X] [Y] [Z]"
-        );
-
-        return 1;
-    }
-
-    new Float:x = floatstr(xString);
-    new Float:y = floatstr(yString);
-    new Float:z = floatstr(zString);
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGotoPos",
-        "ifff",
-        playerid,
-        x,
-        y,
-        z
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GotoCar(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /gotocar [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGotoCar",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GetCar(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /getcar [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetCar",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GetToCar(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new vehicleString[32];
-    new seatString[32];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)) ||
-       !CRP_AdminGetToken(params, 1, vehicleString, sizeof(vehicleString)) ||
-       !CRP_AdminGetToken(params, 2, seatString, sizeof(seatString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /gettocar [ID] [VEHID] [SEAT]"
-        );
-
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    new vehicleid = strval(vehicleString);
-    new seatid = strval(seatString);
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetToCar",
-        "iiii",
-        playerid,
-        targetid,
-        vehicleid,
-        seatid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// PLAYER CONTROL
-// ============================================================
-
-stock CRP_AdminCommand_Freeze(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /freeze [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    TogglePlayerControllable(targetid, false);
-
-    SendClientMessage(
-        targetid,
-        COLOR_YELLOW,
-        "AdminCmd: Kamu telah di-freeze oleh admin."
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GREEN,
-        "AdminCmd: Player berhasil di-freeze."
-    );
-
-    CRP_AdminWriteLog(playerid, "freeze", token);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Unfreeze(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /unfreeze [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    TogglePlayerControllable(targetid, true);
-
-    SendClientMessage(
-        targetid,
-        COLOR_GREEN,
-        "AdminCmd: Kamu telah di-unfreeze oleh admin."
-    );
-
-    CRP_AdminWriteLog(playerid, "unfreeze", token);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Slap(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /slap [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    new Float:x;
-    new Float:y;
-    new Float:z;
-
-    GetPlayerPos(targetid, x, y, z);
-    SetPlayerPos(targetid, x, y, z + 5.0);
-
-    SendClientMessage(
-        targetid,
-        COLOR_YELLOW,
-        "AdminCmd: Kamu telah dikenakan slap oleh admin."
-    );
-
-    CRP_AdminWriteLog(playerid, "slap", token);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Heal(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new token[32];
-
-    if(!CRP_AdminGetToken(params, 0, token, sizeof(token)))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "USAGE: /heal [ID]");
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(token);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandHeal",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    CRP_AdminWriteLog(playerid, "heal", token);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetHP(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new hpString[32];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)) ||
-       !CRP_AdminGetToken(params, 1, hpString, sizeof(hpString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /sethp [ID] [HP]"
-        );
-
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    new Float:hp = floatstr(hpString);
-
-    SetPlayerHealth(targetid, hp);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetArmor(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new armorString[32];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)) ||
-       !CRP_AdminGetToken(params, 1, armorString, sizeof(armorString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /setarmor [ID] [ARMOR]"
-        );
-
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    new Float:armor = floatstr(armorString);
-
-    SetPlayerArmour(targetid, armor);
-
-    return 1;
-}
-
-
-// ============================================================
-// WARNING
-// ============================================================
-
-stock CRP_AdminCommand_Warn(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new reason[192];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /warn [ID] [reason]"
-        );
-
-        return 1;
-    }
-
-    CRP_AdminGetRest(params, 1, reason, sizeof(reason));
-
-    if(!strlen(reason))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /warn [ID] [reason]"
-        );
-
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandWarn",
-        "iis",
-        playerid,
-        targetid,
-        reason
-    );
-
-    CRP_AdminWriteLog(playerid, "warn", idString);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Unwarn(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /unwarn [ID]"
-        );
-
-        return 1;
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandUnwarn",
-        "ii",
-        playerid,
-        targetid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// KICK
-// ============================================================
-
-stock CRP_AdminCommand_Kick(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new reason[192];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /kick [ID] [reason]"
-        );
-
-        return 1;
-    }
-
-    CRP_AdminGetRest(params, 1, reason, sizeof(reason));
-
-    if(!strlen(reason))
-    {
-        format(reason, sizeof(reason), "No reason specified.");
-    }
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandKick",
-        "iis",
-        playerid,
-        targetid,
-        reason
-    );
-
-    CRP_AdminWriteLog(playerid, "kick", idString);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_KickAll(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    for(new i = 0; i < MAX_PLAYERS; i++)
-    {
-        if(!IsPlayerConnected(i))
-            continue;
-
-        if(i == playerid)
-            continue;
-
-        if(CRP_AdminIsStaff(i))
-            continue;
-
-        CallRemoteFunction(
-            "CRP_AdminCommandKick",
-            "iis",
-            playerid,
-            i,
-            "Server maintenance."
-        );
-    }
-
-    CRP_AdminWriteLog(
-        playerid,
-        "kickall",
-        "all"
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// BAN / BLOCK
-// ============================================================
-
-stock CRP_AdminCommand_TBan(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new durationString[32];
-    new reason[192];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)) ||
-       !CRP_AdminGetToken(params, 1, durationString, sizeof(durationString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /tban [ID] [duration] [reason]"
-        );
-
-        return 1;
-    }
-
-    CRP_AdminGetRest(params, 2, reason, sizeof(reason));
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    new duration = strval(durationString);
-
-    CallRemoteFunction(
-        "CRP_AdminCommandTBan",
-        "iiis",
-        playerid,
-        targetid,
-        duration,
-        reason
-    );
-
-    CRP_AdminWriteLog(playerid, "tban", idString);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Ban(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new idString[32];
-    new reason[192];
-
-    if(!CRP_AdminGetToken(params, 0, idString, sizeof(idString)))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /ban [ID] [reason]"
-        );
-
-        return 1;
-    }
-
-    CRP_AdminGetRest(params, 1, reason, sizeof(reason));
-
-    new targetid = CRP_AdminFindPlayer(idString);
-
-    if(!CRP_AdminRequireTarget(playerid, targetid))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandBan",
-        "iis",
-        playerid,
-        targetid,
-        reason
-    );
-
-    CRP_AdminWriteLog(playerid, "ban", idString);
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_OBan(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandOBan",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_OABan(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandOABan",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Aban(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandABan",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_BlockUser(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandBlockUser",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// UNBAN / UNBLOCK
-// ============================================================
-
-stock CRP_AdminCommand_Unban(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new rank = CRP_AdminGetRank(playerid);
-
-    CallRemoteFunction(
-        "CRP_AdminCommandUnban",
-        "iis",
-        playerid,
-        rank,
-        params
-    );
-
-    CRP_AdminWriteLog(
-        playerid,
-        "unban",
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_UnblockUser(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    new rank = CRP_AdminGetRank(playerid);
-
-    CallRemoteFunction(
-        "CRP_AdminCommandUnblockUser",
-        "iis",
-        playerid,
-        rank,
-        params
-    );
-
-    CRP_AdminWriteLog(
-        playerid,
-        "unblockuser",
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// JAIL
-// ============================================================
-
-stock CRP_AdminCommand_Jail(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandJail",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_OJail(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandOJail",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Jailed(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandJailed",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// VEHICLE
-// ============================================================
-
-stock CRP_AdminCommand_FixVeh(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandFixVeh",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Flip(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandFlip",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_RespawnCar(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandRespawnCar",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_DestroyCar(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandDestroyCar",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_RespawnAllCars(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandRespawnAllCars",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_AFill(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandAFill",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// CHARACTER / ACCOUNT
-// ============================================================
-
-stock CRP_AdminCommand_SetSkin(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_ADMIN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetSkin",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_ChangeName(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HIGH_ADMIN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandChangeName",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_CharRemove(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SERVER_DIRECTOR))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandCharRemove",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetJob(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_DIRECTOR))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetJob",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetAge(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_DIRECTOR))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetAge",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// ACCOUNT INVESTIGATION
-// RANK 1+
-// ============================================================
-
-stock CRP_AdminCommand_CheckIP(playerid, const params[])
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckIP",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_OCheckIP(playerid, const params[])
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandOCheckIP",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_IP(playerid, const params[])
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandIP",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// REPORT
-// ============================================================
-
-stock CRP_AdminCommand_Reports(playerid)
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminLogsOpenReportLogs",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_MyReports(playerid)
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_INTERN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandMyReports",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// ADDITIONAL
-// ============================================================
-
-stock CRP_AdminCommand_AFrisk(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandAFrisk",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_CheckMask(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandCheckMask",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_BigEars(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandBigEars",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Jetpack(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandJetpack",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Fly(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandFly",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GiveWeapon(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SUPERVISOR))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGiveWeapon",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_Explode(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HIGH_ADMIN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandExplode",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// CHAT
-// ============================================================
-
-stock CRP_AdminCommand_ClearChat(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SUPERVISOR))
-        return 1;
-
-    for(new i = 0; i < 30; i++)
-    {
-        SendClientMessageToAll(
-            COLOR_WHITE,
-            " "
-        );
-    }
-
-    SendClientMessageToAll(
-        COLOR_GOLD,
-        "AdminCmd: Chat telah dibersihkan oleh Administrator."
-    );
-
-    CRP_AdminWriteLog(
-        playerid,
-        "clearchat",
-        "all"
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_CC(playerid)
-{
-    return CRP_AdminCommand_ClearChat(playerid);
-}
-
-
-// ============================================================
-// SERVER
-// ============================================================
-
-stock CRP_AdminCommand_Announce(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_SENIOR_ADMIN))
-        return 1;
-
-    if(!strlen(params))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_YELLOW,
-            "USAGE: /announce [message]"
-        );
-
-        return 1;
-    }
-
-    new username[64];
-    CRP_AdminGetAccountUsername(
-        playerid,
-        username,
-        sizeof(username)
-    );
-
-    new message[256];
-
-    format(
-        message,
-        sizeof(message),
-        "AdminCmd: %s: %s",
-        username,
-        params
-    );
-
-    SendClientMessageToAll(
-        COLOR_GOLD,
-        message
-    );
-
-    CRP_AdminWriteLog(
-        playerid,
-        "announce",
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetWeather(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_ADMIN))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetWeather",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetTime(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_DEVELOPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetTime",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GMX(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_DEVELOPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGMX",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_ReloadMap(playerid)
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_DEVELOPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandReloadMap",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// WORLD
-// ============================================================
-
-stock CRP_AdminCommand_GetInt(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetInt",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetInt(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetInt",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GotoInt(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGotoInt",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_GetVW(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandGetVW",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_SetVW(playerid, const params[])
-{
-    if(!CRP_AdminRequireDuty(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminCommandSetVW",
-        "is",
-        playerid,
-        params
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// MY BANS
-// ============================================================
-
-stock CRP_AdminCommand_MyBans(playerid)
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_HELPER))
-        return 1;
-
-    SendClientMessage(
-        playerid,
-        COLOR_GOLD,
-        "AdminCmd: Pilih kategori My Bans melalui Admin Panel."
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_MyBansCharacter(playerid)
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminLogsOpenMyCharacterBans",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-stock CRP_AdminCommand_MyBansUCP(playerid)
-{
-    if(!CRP_AdminRequireStaff(playerid, ADMIN_HELPER))
-        return 1;
-
-    CallRemoteFunction(
-        "CRP_AdminLogsOpenMyUCPBans",
-        "i",
-        playerid
-    );
-
-    return 1;
-}
-
-
-// ============================================================
-// COMMAND DISPATCHER
-// ============================================================
-
-stock CRP_AdminDispatchCommand(playerid, const command[], const params[])
-{
-    // --------------------------------------------------------
-    // CORE
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "ap", true))
-        return CRP_AdminCommand_AP(playerid);
-
-    if(!strcmp(command, "a", true))
-        return CRP_AdminCommand_A(playerid, params);
-
-    if(!strcmp(command, "ahelp", true))
-        return CRP_AdminCommand_AHelp(playerid);
-
-    if(!strcmp(command, "admins", true))
-        return CRP_AdminCommand_Admins(playerid);
-
-    if(!strcmp(command, "aon", true))
-        return CRP_AdminCommand_AOn(playerid);
-
-    if(!strcmp(command, "aoff", true))
-        return CRP_AdminCommand_AOff(playerid);
-
-
-    // --------------------------------------------------------
-    // INSPECTION
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "check", true))
-        return CRP_AdminCommand_Check(playerid, params);
-
-    if(!strcmp(command, "ainspect", true))
-        return CRP_AdminCommand_AInspect(playerid, params);
-
-    if(!strcmp(command, "checkgun", true))
-        return CRP_AdminCommand_CheckGun(playerid, params);
-
-    if(!strcmp(command, "checkweapons", true))
-        return CRP_AdminCommand_CheckWeapons(playerid, params);
-
-    if(!strcmp(command, "checkwarn", true))
-        return CRP_AdminCommand_CheckWarn(playerid, params);
-
-    if(!strcmp(command, "checkjail", true))
-        return CRP_AdminCommand_CheckJail(playerid, params);
-
-    if(!strcmp(command, "checkveh", true))
-        return CRP_AdminCommand_CheckVeh(playerid, params);
-
-
-    // --------------------------------------------------------
-    // TELEPORT
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "goto", true))
-        return CRP_AdminCommand_Goto(playerid, params);
-
-    if(!strcmp(command, "gethere", true))
-        return CRP_AdminCommand_GetHere(playerid, params);
-
-    if(!strcmp(command, "p2p", true))
-        return CRP_AdminCommand_P2P(playerid, params);
-
-    if(!strcmp(command, "sendtols", true))
-        return CRP_AdminCommand_SendToLS(playerid, params);
-
-    if(!strcmp(command, "mark", true))
-        return CRP_AdminCommand_Mark(playerid);
-
-    if(!strcmp(command, "gotomark", true))
-        return CRP_AdminCommand_GotoMark(playerid);
-
-    if(!strcmp(command, "getpos", true))
-        return CRP_AdminCommand_GetPos(playerid);
-
-    if(!strcmp(command, "gotopos", true))
-        return CRP_AdminCommand_GotoPos(playerid, params);
-
-    if(!strcmp(command, "gotocar", true))
-        return CRP_AdminCommand_GotoCar(playerid, params);
-
-    if(!strcmp(command, "getcar", true))
-        return CRP_AdminCommand_GetCar(playerid, params);
-
-    if(!strcmp(command, "gettocar", true))
-        return CRP_AdminCommand_GetToCar(playerid, params);
-
-
-    // --------------------------------------------------------
-    // PLAYER CONTROL
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "freeze", true))
-        return CRP_AdminCommand_Freeze(playerid, params);
-
-    if(!strcmp(command, "unfreeze", true))
-        return CRP_AdminCommand_Unfreeze(playerid, params);
-
-    if(!strcmp(command, "slap", true))
-        return CRP_AdminCommand_Slap(playerid, params);
-
-    if(!strcmp(command, "heal", true))
-        return CRP_AdminCommand_Heal(playerid, params);
-
-    if(!strcmp(command, "sethp", true))
-        return CRP_AdminCommand_SetHP(playerid, params);
-
-    if(!strcmp(command, "setarmor", true))
-        return CRP_AdminCommand_SetArmor(playerid, params);
-
-
-    // --------------------------------------------------------
-    // WARNING
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "warn", true))
-        return CRP_AdminCommand_Warn(playerid, params);
-
-    if(!strcmp(command, "unwarn", true))
-        return CRP_AdminCommand_Unwarn(playerid, params);
-
-
-    // --------------------------------------------------------
-    // KICK
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "kick", true))
-        return CRP_AdminCommand_Kick(playerid, params);
-
-    if(!strcmp(command, "kickall", true))
-        return CRP_AdminCommand_KickAll(playerid);
-
-
-    // --------------------------------------------------------
-    // BAN / BLOCK
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "tban", true))
-        return CRP_AdminCommand_TBan(playerid, params);
-
-    if(!strcmp(command, "blockuser", true))
-        return CRP_AdminCommand_BlockUser(playerid, params);
-
-    if(!strcmp(command, "aban", true))
-        return CRP_AdminCommand_Aban(playerid, params);
-
-    if(!strcmp(command, "ban", true))
-        return CRP_AdminCommand_Ban(playerid, params);
-
-    if(!strcmp(command, "oban", true))
-        return CRP_AdminCommand_OBan(playerid, params);
-
-    if(!strcmp(command, "oaban", true))
-        return CRP_AdminCommand_OABan(playerid, params);
-
-    if(!strcmp(command, "unban", true))
-        return CRP_AdminCommand_Unban(playerid, params);
-
-    if(!strcmp(command, "unblockuser", true))
-        return CRP_AdminCommand_UnblockUser(playerid, params);
-
-
-    // --------------------------------------------------------
-    // JAIL
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "jail", true))
-        return CRP_AdminCommand_Jail(playerid, params);
-
-    if(!strcmp(command, "ojail", true))
-        return CRP_AdminCommand_OJail(playerid, params);
-
-    if(!strcmp(command, "jailed", true))
-        return CRP_AdminCommand_Jailed(playerid);
-
-
-    // --------------------------------------------------------
-    // VEHICLE
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "fixveh", true))
-        return CRP_AdminCommand_FixVeh(playerid, params);
-
-    if(!strcmp(command, "flip", true))
-        return CRP_AdminCommand_Flip(playerid, params);
-
-    if(!strcmp(command, "respawncar", true))
-        return CRP_AdminCommand_RespawnCar(playerid, params);
-
-    if(!strcmp(command, "destroycar", true))
-        return CRP_AdminCommand_DestroyCar(playerid, params);
-
-    if(!strcmp(command, "respawnallcars", true))
-        return CRP_AdminCommand_RespawnAllCars(playerid);
-
-    if(!strcmp(command, "afill", true))
-        return CRP_AdminCommand_AFill(playerid, params);
-
-
-    // --------------------------------------------------------
-    // CHARACTER
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "setskin", true))
-        return CRP_AdminCommand_SetSkin(playerid, params);
-
-    if(!strcmp(command, "changename", true))
-        return CRP_AdminCommand_ChangeName(playerid, params);
-
-    if(!strcmp(command, "charremove", true))
-        return CRP_AdminCommand_CharRemove(playerid, params);
-
-    if(!strcmp(command, "setjob", true))
-        return CRP_AdminCommand_SetJob(playerid, params);
-
-    if(!strcmp(command, "setage", true))
-        return CRP_AdminCommand_SetAge(playerid, params);
-
-
-    // --------------------------------------------------------
-    // ACCOUNT INVESTIGATION
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "checkip", true))
-        return CRP_AdminCommand_CheckIP(playerid, params);
-
-    if(!strcmp(command, "ocheckip", true))
-        return CRP_AdminCommand_OCheckIP(playerid, params);
-
-    if(!strcmp(command, "ip", true))
-        return CRP_AdminCommand_IP(playerid, params);
-
-
-    // --------------------------------------------------------
-    // REPORT
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "reports", true))
-        return CRP_AdminCommand_Reports(playerid);
-
-    if(!strcmp(command, "myreports", true))
-        return CRP_AdminCommand_MyReports(playerid);
-
-
-    // --------------------------------------------------------
-    // ADDITIONAL
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "afrisk", true))
-        return CRP_AdminCommand_AFrisk(playerid, params);
-
-    if(!strcmp(command, "checkmask", true))
-        return CRP_AdminCommand_CheckMask(playerid, params);
-
-    if(!strcmp(command, "bigears", true))
-        return CRP_AdminCommand_BigEars(playerid, params);
-
-    if(!strcmp(command, "jetpack", true))
-        return CRP_AdminCommand_Jetpack(playerid, params);
-
-    if(!strcmp(command, "fly", true))
-        return CRP_AdminCommand_Fly(playerid);
-
-    if(!strcmp(command, "giveweapon", true))
-        return CRP_AdminCommand_GiveWeapon(playerid, params);
-
-    if(!strcmp(command, "explode", true))
-        return CRP_AdminCommand_Explode(playerid, params);
-
-
-    // --------------------------------------------------------
-    // CHAT
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "clearchat", true))
-        return CRP_AdminCommand_ClearChat(playerid);
-
-    if(!strcmp(command, "cc", true))
-        return CRP_AdminCommand_CC(playerid);
-
-
-    // --------------------------------------------------------
-    // SERVER
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "announce", true))
-        return CRP_AdminCommand_Announce(playerid, params);
-
-    if(!strcmp(command, "setweather", true))
-        return CRP_AdminCommand_SetWeather(playerid, params);
-
-    if(!strcmp(command, "settime", true))
-        return CRP_AdminCommand_SetTime(playerid, params);
-
-    if(!strcmp(command, "gmx", true))
-        return CRP_AdminCommand_GMX(playerid);
-
-    if(!strcmp(command, "reloadmap", true))
-        return CRP_AdminCommand_ReloadMap(playerid);
-
-
-    // --------------------------------------------------------
-    // WORLD
-    // --------------------------------------------------------
-
-    if(!strcmp(command, "getint", true))
-        return CRP_AdminCommand_GetInt(playerid, params);
-
-    if(!strcmp(command, "setint", true))
-        return CRP_AdminCommand_SetInt(playerid, params);
-
-    if(!strcmp(command, "gotoint", true))
-        return CRP_AdminCommand_GotoInt(playerid, params);
-
-    if(!strcmp(command, "getvw", true))
-        return CRP_AdminCommand_GetVW(playerid, params);
-
-    if(!strcmp(command, "setvw", true))
-        return CRP_AdminCommand_SetVW(playerid, params);
-
-
-    // --------------------------------------------------------
-    // UNKNOWN COMMAND
-    // --------------------------------------------------------
-
-    return 0;
-}
-
-
-// ============================================================
-// COMMAND TEXT PARSER
-//
-// Tanpa plugin command processor.
-// Menangkap command dari OnPlayerCommandText.
-// ============================================================
-
-public OnPlayerCommandText(playerid, cmdtext[])
-{
-    if(cmdtext[0] != '/')
-        return 0;
-
-    new length = strlen(cmdtext);
-
-    if(length <= 1)
-        return 0;
-
-    new position = 1;
-
-    while(cmdtext[position] != ' ' &&
-          cmdtext[position] != EOS)
-    {
-        position++;
-    }
-
-    new commandLength = position - 1;
-
-    if(commandLength <= 0)
-        return 0;
-
-    if(commandLength >= sizeof(gAdminCommand))
-        commandLength = sizeof(gAdminCommand) - 1;
-
-    strmid(
-        gAdminCommand,
-        cmdtext,
-        1,
-        position,
-        sizeof(gAdminCommand)
-    );
-
-    gAdminCommand[commandLength] = EOS;
-
-    gAdminParams[0] = EOS;
-
-    if(cmdtext[position] == ' ')
-    {
-        while(cmdtext[position] == ' ')
-            position++;
-
-        if(cmdtext[position] != EOS)
-        {
-            strmid(
-                gAdminParams,
-                cmdtext,
-                position,
-                length,
-                sizeof(gAdminParams)
-            );
-        }
-    }
-
-    return CRP_AdminDispatchCommand(
-        playerid,
-        gAdminCommand,
-        gAdminParams
-    );
-}
-
-
-// ============================================================
-// REMOTE CALLBACKS
-// ============================================================
-
-public CRP_AdminCommandLog(
-    playerid,
-    const command[],
-    const target[]
-)
-{
-    #pragma unused playerid
-    #pragma unused command
-    #pragma unused target
-
-    return 1;
-}
-
-
-public CRP_AdminCommandMessage(
-    playerid,
-    const message[]
-)
-{
-    if(IsPlayerConnected(playerid))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            message
-        );
-    }
-
-    return 1;
-}
-
-
-public CRP_AdminOpenMyBansCharacter(playerid)
-{
-    return CRP_AdminCommand_MyBansCharacter(playerid);
-}
-
-
-public CRP_AdminOpenMyBansUCP(playerid)
-{
-    return CRP_AdminCommand_MyBansUCP(playerid);
-}
+   
