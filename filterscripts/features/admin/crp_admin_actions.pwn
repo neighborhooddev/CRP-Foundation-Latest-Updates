@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Admin Actions Backend v1.0
+// Admin Actions Backend v1.1
 //
 // File:
 // filterscripts/features/admin/crp_admin_actions.pwn
@@ -68,8 +68,11 @@
 #define CRP_ADMIN_ACTION_MAX_REASON       192
 #define CRP_ADMIN_ACTION_MAX_CHARACTER    64
 #define CRP_ADMIN_ACTION_MAX_ACCOUNT      64
+#define CRP_ADMIN_ACTION_MAX_ADMIN        64
 
 #define CRP_ADMIN_WARNING_LIMIT           20
+
+#define CRP_ADMIN_JAIL_TIMER_INTERVAL     1000
 
 
 // ============================================================
@@ -115,7 +118,7 @@
 #define CRP_ACTION_MUTE                   6
 #define CRP_ACTION_UNMUTE                 7
 #define CRP_ACTION_JAIL                   8
-#define CRP_ACTION_UNJAIL                 9
+#define CRP_ACTION_UNJAIL                  9
 #define CRP_ACTION_KICK                   10
 #define CRP_ACTION_BLOCK                  11
 #define CRP_ACTION_UNBLOCK                12
@@ -135,16 +138,14 @@
 
 
 // ============================================================
-// PLAYER STATE
-//
-// Hanya runtime state.
-// Persistent state tetap berada di scriptfiles.
+// PLAYER RUNTIME STATE
 // ============================================================
 
 new bool:gCRP_AdminMuted[MAX_PLAYERS];
 new bool:gCRP_AdminJailed[MAX_PLAYERS];
 
 new gCRP_AdminJailEnd[MAX_PLAYERS];
+new gCRP_AdminJailTimer[MAX_PLAYERS];
 
 
 // ============================================================
@@ -161,7 +162,7 @@ forward CRP_AdminActionsJailTimer(playerid);
 public OnFilterScriptInit()
 {
     print("============================================================");
-    print("Crystal Roleplay - Admin Actions Backend v1.0");
+    print("Crystal Roleplay - Admin Actions Backend v1.1");
     print("Admin Actions Backend initialized.");
     print("Character punishment storage enabled.");
     print("Account block storage enabled.");
@@ -181,6 +182,18 @@ public OnFilterScriptInit()
 
 public OnFilterScriptExit()
 {
+    for(new playerid = 0; playerid < MAX_PLAYERS; playerid++)
+    {
+        if(gCRP_AdminJailTimer[playerid] != 0)
+        {
+            KillTimer(
+                gCRP_AdminJailTimer[playerid]
+            );
+
+            gCRP_AdminJailTimer[playerid] = 0;
+        }
+    }
+
     print("Crystal Roleplay - Admin Actions Backend unloaded.");
 
     return 1;
@@ -195,7 +208,9 @@ public OnPlayerConnect(playerid)
 {
     gCRP_AdminMuted[playerid] = false;
     gCRP_AdminJailed[playerid] = false;
+
     gCRP_AdminJailEnd[playerid] = 0;
+    gCRP_AdminJailTimer[playerid] = 0;
 
     return 1;
 }
@@ -210,6 +225,12 @@ public OnPlayerDisconnect(
     reason
 )
 {
+    #pragma unused reason
+
+    CRP_AdminActionsStopJailTimer(
+        playerid
+    );
+
     gCRP_AdminMuted[playerid] = false;
     gCRP_AdminJailed[playerid] = false;
     gCRP_AdminJailEnd[playerid] = 0;
@@ -258,25 +279,27 @@ stock CRP_AdminActionsTrim(
 }
 
 
-stock bool:CRP_AdminActionsIsNumeric(
-    const text[]
+// ============================================================
+// STORAGE SANITIZER
+//
+// Flat-file storage menggunakan "|" sebagai delimiter.
+// Character/account/admin/reason tidak boleh membawa "|"
+// karena dapat merusak struktur record.
+// ============================================================
+
+stock CRP_AdminActionsSanitize(
+    text[]
 )
 {
-    if(!strlen(text))
-        return false;
-
     for(new i = 0; text[i] != EOS; i++)
     {
-        if(
-            text[i] < '0' ||
-            text[i] > '9'
-        )
+        if(text[i] == '|')
         {
-            return false;
+            text[i] = '/';
         }
     }
 
-    return true;
+    return 1;
 }
 
 
@@ -286,9 +309,8 @@ stock bool:CRP_AdminActionsIsNumeric(
 // Foundation API:
 // CRP_AdminGetAccountUsername
 //
-// Untuk sementara foundation menggunakan identity yang
-// tersedia dari foundation. Backend tidak membuat sistem
-// account baru.
+// Foundation saat ini dapat menggunakan identity fallback.
+// Backend tidak membuat sistem account baru.
 // ============================================================
 
 stock CRP_AdminActionsGetAccount(
@@ -298,6 +320,14 @@ stock CRP_AdminActionsGetAccount(
 )
 {
     output[0] = EOS;
+
+    if(
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
 
     CallRemoteFunction(
         "CRP_AdminGetAccountUsername",
@@ -316,6 +346,10 @@ stock CRP_AdminActionsGetAccount(
         );
     }
 
+    CRP_AdminActionsSanitize(
+        output
+    );
+
     return 1;
 }
 
@@ -323,12 +357,11 @@ stock CRP_AdminActionsGetAccount(
 // ============================================================
 // CHARACTER IDENTITY
 //
-// Saat Character Activation API belum dijadikan dependency
-// backend, foundation identity player digunakan sebagai
-// fallback character identifier.
+// Saat Character Activation API belum menjadi dependency
+// backend, player name digunakan sebagai fallback.
 //
-// Ketika Character Activation system sudah menyediakan
-// remote API, helper ini menjadi satu titik penggantian.
+// Ketika Character Activation system menyediakan remote API,
+// helper ini menjadi satu titik penggantian.
 // ============================================================
 
 stock CRP_AdminActionsGetCharacter(
@@ -339,10 +372,22 @@ stock CRP_AdminActionsGetCharacter(
 {
     output[0] = EOS;
 
+    if(
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
     GetPlayerName(
         playerid,
         output,
         size
+    );
+
+    CRP_AdminActionsSanitize(
+        output
     );
 
     return 1;
@@ -356,16 +401,14 @@ stock CRP_AdminActionsGetCharacter(
 stock CRP_AdminActionsGetAdminName(
     playerid,
     output[],
-    size = 64
+    size = CRP_ADMIN_ACTION_MAX_ADMIN
 )
 {
-    CRP_AdminActionsGetAccount(
+    return CRP_AdminActionsGetAccount(
         playerid,
         output,
         size
     );
-
-    return 1;
 }
 
 
@@ -429,7 +472,10 @@ stock CRP_AdminActionsLog(
     const reason[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
+    new safeAction[64];
+    new safeTarget[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new safeReason[CRP_ADMIN_ACTION_MAX_REASON];
     new line[512];
 
     CRP_AdminActionsGetAdminName(
@@ -439,22 +485,53 @@ stock CRP_AdminActionsLog(
     );
 
     format(
+        safeAction,
+        sizeof(safeAction),
+        "%s",
+        action
+    );
+
+    format(
+        safeTarget,
+        sizeof(safeTarget),
+        "%s",
+        target
+    );
+
+    format(
+        safeReason,
+        sizeof(safeReason),
+        "%s",
+        reason
+    );
+
+    CRP_AdminActionsSanitize(
+        safeAction
+    );
+
+    CRP_AdminActionsSanitize(
+        safeTarget
+    );
+
+    CRP_AdminActionsSanitize(
+        safeReason
+    );
+
+    format(
         line,
         sizeof(line),
         "%d|%s|%s|%s|%s\r\n",
         CRP_AdminActionsGetTime(),
         adminName,
-        action,
-        target,
-        reason
+        safeAction,
+        safeTarget,
+        safeReason
     );
 
-    CRP_AdminActionsAppend(
+    return CRP_AdminActionsAppend(
         CRP_ADMIN_ACTION_LOG,
         line
     );
-
-    return 1;
 }
 
 
@@ -500,17 +577,45 @@ stock CRP_AdminActionsWriteBan(
     const reason[]
 )
 {
+    new safeCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new safeAdmin[CRP_ADMIN_ACTION_MAX_ADMIN];
+    new safeReason[CRP_ADMIN_ACTION_MAX_REASON];
     new line[512];
+
+    format(
+        safeCharacter,
+        sizeof(safeCharacter),
+        "%s",
+        character
+    );
+
+    format(
+        safeAdmin,
+        sizeof(safeAdmin),
+        "%s",
+        admin
+    );
+
+    format(
+        safeReason,
+        sizeof(safeReason),
+        "%s",
+        reason
+    );
+
+    CRP_AdminActionsSanitize(safeCharacter);
+    CRP_AdminActionsSanitize(safeAdmin);
+    CRP_AdminActionsSanitize(safeReason);
 
     format(
         line,
         sizeof(line),
         "%s|%d|%d|%s|%s\r\n",
-        character,
+        safeCharacter,
         type,
         expires,
-        admin,
-        reason
+        safeAdmin,
+        safeReason
     );
 
     return CRP_AdminActionsAppend(
@@ -534,16 +639,44 @@ stock CRP_AdminActionsWriteWarning(
     const reason[]
 )
 {
+    new safeCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new safeAdmin[CRP_ADMIN_ACTION_MAX_ADMIN];
+    new safeReason[CRP_ADMIN_ACTION_MAX_REASON];
     new line[512];
+
+    format(
+        safeCharacter,
+        sizeof(safeCharacter),
+        "%s",
+        character
+    );
+
+    format(
+        safeAdmin,
+        sizeof(safeAdmin),
+        "%s",
+        admin
+    );
+
+    format(
+        safeReason,
+        sizeof(safeReason),
+        "%s",
+        reason
+    );
+
+    CRP_AdminActionsSanitize(safeCharacter);
+    CRP_AdminActionsSanitize(safeAdmin);
+    CRP_AdminActionsSanitize(safeReason);
 
     format(
         line,
         sizeof(line),
         "%s|%d|%s|%s|%d\r\n",
-        character,
+        safeCharacter,
         count,
-        admin,
-        reason,
+        safeAdmin,
+        safeReason,
         CRP_AdminActionsGetTime()
     );
 
@@ -567,15 +700,34 @@ stock CRP_AdminActionsWriteMute(
     const admin[]
 )
 {
+    new safeCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new safeAdmin[CRP_ADMIN_ACTION_MAX_ADMIN];
     new line[256];
+
+    format(
+        safeCharacter,
+        sizeof(safeCharacter),
+        "%s",
+        character
+    );
+
+    format(
+        safeAdmin,
+        sizeof(safeAdmin),
+        "%s",
+        admin
+    );
+
+    CRP_AdminActionsSanitize(safeCharacter);
+    CRP_AdminActionsSanitize(safeAdmin);
 
     format(
         line,
         sizeof(line),
         "%s|%d|%s|%d\r\n",
-        character,
+        safeCharacter,
         state,
-        admin,
+        safeAdmin,
         CRP_AdminActionsGetTime()
     );
 
@@ -604,16 +756,44 @@ stock CRP_AdminActionsWriteJail(
     const reason[]
 )
 {
+    new safeCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new safeAdmin[CRP_ADMIN_ACTION_MAX_ADMIN];
+    new safeReason[CRP_ADMIN_ACTION_MAX_REASON];
     new line[512];
+
+    format(
+        safeCharacter,
+        sizeof(safeCharacter),
+        "%s",
+        character
+    );
+
+    format(
+        safeAdmin,
+        sizeof(safeAdmin),
+        "%s",
+        admin
+    );
+
+    format(
+        safeReason,
+        sizeof(safeReason),
+        "%s",
+        reason
+    );
+
+    CRP_AdminActionsSanitize(safeCharacter);
+    CRP_AdminActionsSanitize(safeAdmin);
+    CRP_AdminActionsSanitize(safeReason);
 
     format(
         line,
         sizeof(line),
         "%s|%d|%s|%s\r\n",
-        character,
+        safeCharacter,
         endtime,
-        admin,
-        reason
+        safeAdmin,
+        safeReason
     );
 
     return CRP_AdminActionsAppend(
@@ -641,17 +821,45 @@ stock CRP_AdminActionsWriteBlock(
     const reason[]
 )
 {
+    new safeAccount[CRP_ADMIN_ACTION_MAX_ACCOUNT];
+    new safeAdmin[CRP_ADMIN_ACTION_MAX_ADMIN];
+    new safeReason[CRP_ADMIN_ACTION_MAX_REASON];
     new line[512];
+
+    format(
+        safeAccount,
+        sizeof(safeAccount),
+        "%s",
+        account
+    );
+
+    format(
+        safeAdmin,
+        sizeof(safeAdmin),
+        "%s",
+        admin
+    );
+
+    format(
+        safeReason,
+        sizeof(safeReason),
+        "%s",
+        reason
+    );
+
+    CRP_AdminActionsSanitize(safeAccount);
+    CRP_AdminActionsSanitize(safeAdmin);
+    CRP_AdminActionsSanitize(safeReason);
 
     format(
         line,
         sizeof(line),
         "%s|%d|%s|%d|%s\r\n",
-        account,
+        safeAccount,
         state,
-        admin,
+        safeAdmin,
         CRP_AdminActionsGetTime(),
-        reason
+        safeReason
     );
 
     return CRP_AdminActionsAppend(
@@ -678,11 +886,7 @@ stock CRP_AdminActionsGetField(
 
     output[0] = EOS;
 
-    for(
-        new i = 0;
-        i <= length;
-        i++
-    )
+    for(new i = 0; i <= length; i++)
     {
         if(
             source[i] == '|' ||
@@ -696,13 +900,20 @@ stock CRP_AdminActionsGetField(
                 if(fieldLength >= size)
                     fieldLength = size - 1;
 
-                strmid(
-                    output,
-                    source,
-                    start,
-                    start + fieldLength,
-                    size
-                );
+                if(fieldLength > 0)
+                {
+                    strmid(
+                        output,
+                        source,
+                        start,
+                        start + fieldLength,
+                        size
+                    );
+                }
+                else
+                {
+                    output[0] = EOS;
+                }
 
                 return 1;
             }
@@ -718,10 +929,6 @@ stock CRP_AdminActionsGetField(
 
 // ============================================================
 // CHARACTER BAN CHECK
-//
-// Membaca seluruh history.
-// Record terakhir untuk character tersebut dianggap state
-// terbaru.
 // ============================================================
 
 stock bool:CRP_AdminActionsCheckCharacterBan(
@@ -744,17 +951,14 @@ stock bool:CRP_AdminActionsCheckCharacterBan(
     new latestType = 0;
     new latestExpires = 0;
 
-    while(fread(
-        file,
-        line
-    ))
+    while(fread(file, line))
     {
         CRP_AdminActionsTrim(line);
 
         if(!strlen(line))
             continue;
 
-        new recordCharacter[64];
+        new recordCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
 
         CRP_AdminActionsGetField(
             line,
@@ -833,20 +1037,16 @@ stock bool:CRP_AdminActionsCheckAccountBlock(
         return false;
 
     new line[512];
-
     new latestState = 0;
 
-    while(fread(
-        file,
-        line
-    ))
+    while(fread(file, line))
     {
         CRP_AdminActionsTrim(line);
 
         if(!strlen(line))
             continue;
 
-        new recordAccount[64];
+        new recordAccount[CRP_ADMIN_ACTION_MAX_ACCOUNT];
 
         CRP_AdminActionsGetField(
             line,
@@ -901,17 +1101,14 @@ stock CRP_AdminActionsGetCharacterWarnings(
     new line[512];
     new latestCount = 0;
 
-    while(fread(
-        file,
-        line
-    ))
+    while(fread(file, line))
     {
         CRP_AdminActionsTrim(line);
 
         if(!strlen(line))
             continue;
 
-        new recordCharacter[64];
+        new recordCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
 
         CRP_AdminActionsGetField(
             line,
@@ -943,6 +1140,12 @@ stock CRP_AdminActionsGetCharacterWarnings(
 
     fclose(file);
 
+    if(latestCount < 0)
+        latestCount = 0;
+
+    if(latestCount > CRP_ADMIN_WARNING_LIMIT)
+        latestCount = CRP_ADMIN_WARNING_LIMIT;
+
     return latestCount;
 }
 
@@ -966,17 +1169,14 @@ stock bool:CRP_AdminActionsGetCharacterMute(
     new line[256];
     new latestState = 0;
 
-    while(fread(
-        file,
-        line
-    ))
+    while(fread(file, line))
     {
         CRP_AdminActionsTrim(line);
 
         if(!strlen(line))
             continue;
 
-        new recordCharacter[64];
+        new recordCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
 
         CRP_AdminActionsGetField(
             line,
@@ -1032,7 +1232,7 @@ stock bool:CRP_AdminActionsIsPlayerMuted(
     if(gCRP_AdminMuted[playerid])
         return true;
 
-    new character[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
 
     CRP_AdminActionsGetCharacter(
         playerid,
@@ -1040,9 +1240,7 @@ stock bool:CRP_AdminActionsIsPlayerMuted(
         sizeof(character)
     );
 
-    if(CRP_AdminActionsGetCharacterMute(
-        character
-    ))
+    if(CRP_AdminActionsGetCharacterMute(character))
     {
         gCRP_AdminMuted[playerid] = true;
         return true;
@@ -1071,17 +1269,14 @@ stock CRP_AdminActionsGetCharacterJailEnd(
     new line[512];
     new latestEndTime = 0;
 
-    while(fread(
-        file,
-        line
-    ))
+    while(fread(file, line))
     {
         CRP_AdminActionsTrim(line);
 
         if(!strlen(line))
             continue;
 
-        new recordCharacter[64];
+        new recordCharacter[CRP_ADMIN_ACTION_MAX_CHARACTER];
 
         CRP_AdminActionsGetField(
             line,
@@ -1125,9 +1320,10 @@ stock bool:CRP_AdminActionsIsCharacterJailed(
     const character[]
 )
 {
-    new endTime = CRP_AdminActionsGetCharacterJailEnd(
-        character
-    );
+    new endTime =
+        CRP_AdminActionsGetCharacterJailEnd(
+            character
+        );
 
     if(endTime <= 0)
         return false;
@@ -1195,7 +1391,10 @@ stock CRP_AdminActionsReleaseOOCJail(
         return 0;
 
     gCRP_AdminJailed[playerid] = false;
-    gCRP_AdminJailEnd[playerid] = 0;
+
+    CRP_AdminActionsStopJailTimer(
+        playerid
+    );
 
     SetPlayerInterior(
         playerid,
@@ -1245,11 +1444,46 @@ stock CRP_AdminActionsStartJailTimer(
     if(!IsPlayerConnected(playerid))
         return 0;
 
-    gCRP_AdminJailEnd[playerid] =
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+
+    CRP_AdminActionsGetCharacter(
+        playerid,
+        character,
+        sizeof(character)
+    );
+
+    new endTime =
         CRP_AdminActionsGetCharacterJailEnd(
-            (
-                ""
-            )
+            character
+        );
+
+    if(endTime <= CRP_AdminActionsGetTime())
+    {
+        CRP_AdminActionsStopJailTimer(
+            playerid
+        );
+
+        return 0;
+    }
+
+    if(gCRP_AdminJailTimer[playerid] != 0)
+    {
+        KillTimer(
+            gCRP_AdminJailTimer[playerid]
+        );
+
+        gCRP_AdminJailTimer[playerid] = 0;
+    }
+
+    gCRP_AdminJailEnd[playerid] = endTime;
+
+    gCRP_AdminJailTimer[playerid] =
+        SetTimerEx(
+            "CRP_AdminActionsJailTimer",
+            CRP_ADMIN_JAIL_TIMER_INTERVAL,
+            true,
+            "i",
+            playerid
         );
 
     return 1;
@@ -1264,6 +1498,23 @@ stock CRP_AdminActionsStopJailTimer(
     playerid
 )
 {
+    if(
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS
+    )
+    {
+        return 0;
+    }
+
+    if(gCRP_AdminJailTimer[playerid] != 0)
+    {
+        KillTimer(
+            gCRP_AdminJailTimer[playerid]
+        );
+
+        gCRP_AdminJailTimer[playerid] = 0;
+    }
+
     gCRP_AdminJailEnd[playerid] = 0;
 
     return 1;
@@ -1278,49 +1529,54 @@ public CRP_AdminActionsJailTimer(
     playerid
 )
 {
-    if(!IsPlayerConnected(playerid))
+    if(
+        playerid < 0 ||
+        playerid >= MAX_PLAYERS ||
+        !IsPlayerConnected(playerid)
+    )
     {
-        gCRP_AdminJailEnd[playerid] = 0;
+        CRP_AdminActionsStopJailTimer(
+            playerid
+        );
+
         return 0;
     }
 
     if(!gCRP_AdminJailed[playerid])
-        return 0;
-
-    if(
-        gCRP_AdminJailEnd[playerid] <=
-        CRP_AdminActionsGetTime()
-    )
     {
-        new character[64];
-
-        CRP_AdminActionsGetCharacter(
-            playerid,
-            character,
-            sizeof(character)
-        );
-
-        new adminName[64];
-
-        format(
-            adminName,
-            sizeof(adminName),
-            "SYSTEM"
-        );
-
-        CRP_AdminActionsWriteJail(
-            character,
-            0,
-            adminName,
-            "Jail selesai"
-        );
-
-        CRP_AdminActionsReleaseOOCJail(
+        CRP_AdminActionsStopJailTimer(
             playerid
         );
 
+        return 0;
+    }
+
+    if(
+        gCRP_AdminJailEnd[playerid] >
+        CRP_AdminActionsGetTime()
+    )
+    {
         return 1;
     }
+
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+
+    CRP_AdminActionsGetCharacter(
+        playerid,
+        character,
+        sizeof(character)
+    );
+
+    CRP_AdminActionsWriteJail(
+        character,
+        0,
+        "SYSTEM",
+        "Jail selesai"
+    );
+
+    CRP_AdminActionsReleaseOOCJail(
+        playerid
+    );
 
     return 1;
 }
@@ -1359,8 +1615,13 @@ stock CRP_AdminActionsApplyPendingJail(
         playerid
     );
 
+    CRP_AdminActionsStartJailTimer(
+        playerid
+    );
+
     new remaining =
-        endTime - CRP_AdminActionsGetTime();
+        endTime -
+        CRP_AdminActionsGetTime();
 
     new message[144];
 
@@ -1394,8 +1655,8 @@ public CRP_AdminActionKick(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new targetName[64];
-    new adminName[64];
+    new targetName[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1440,9 +1701,7 @@ public CRP_AdminActionKick(
         reason
     );
 
-    Kick(
-        targetid
-    );
+    Kick(targetid);
 
     return 1;
 }
@@ -1461,8 +1720,8 @@ public CRP_AdminActionBan(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1477,13 +1736,16 @@ public CRP_AdminActionBan(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteBan(
+    if(!CRP_AdminActionsWriteBan(
         character,
         1,
         -1,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -1493,9 +1755,7 @@ public CRP_AdminActionBan(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -1504,9 +1764,7 @@ public CRP_AdminActionBan(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1515,9 +1773,7 @@ public CRP_AdminActionBan(
         reason
     );
 
-    Kick(
-        targetid
-    );
+    Kick(targetid);
 
     return 1;
 }
@@ -1533,7 +1789,7 @@ public CRP_AdminActionOfflineBan(
     const reason[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -1542,13 +1798,16 @@ public CRP_AdminActionOfflineBan(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteBan(
+    if(!CRP_AdminActionsWriteBan(
         character,
         1,
         -1,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -1558,9 +1817,7 @@ public CRP_AdminActionOfflineBan(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -1569,9 +1826,7 @@ public CRP_AdminActionOfflineBan(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1593,7 +1848,7 @@ public CRP_AdminActionUnban(
     const character[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -1602,13 +1857,16 @@ public CRP_AdminActionUnban(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteBan(
+    if(!CRP_AdminActionsWriteBan(
         character,
         0,
         0,
         adminName,
         "Character ban dibuka"
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -1618,9 +1876,7 @@ public CRP_AdminActionUnban(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1645,8 +1901,8 @@ public CRP_AdminActionMute(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1661,11 +1917,14 @@ public CRP_AdminActionMute(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteMute(
+    if(!CRP_AdminActionsWriteMute(
         character,
         1,
         adminName
-    );
+    ))
+    {
+        return 0;
+    }
 
     gCRP_AdminMuted[targetid] = true;
 
@@ -1677,9 +1936,7 @@ public CRP_AdminActionMute(
         character
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1704,8 +1961,8 @@ public CRP_AdminActionUnmute(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1720,11 +1977,14 @@ public CRP_AdminActionUnmute(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteMute(
+    if(!CRP_AdminActionsWriteMute(
         character,
         0,
         adminName
-    );
+    ))
+    {
+        return 0;
+    }
 
     gCRP_AdminMuted[targetid] = false;
 
@@ -1736,9 +1996,7 @@ public CRP_AdminActionUnmute(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1764,8 +2022,8 @@ public CRP_AdminActionWarn(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1790,12 +2048,15 @@ public CRP_AdminActionWarn(
         count++;
     }
 
-    CRP_AdminActionsWriteWarning(
+    if(!CRP_AdminActionsWriteWarning(
         character,
         count,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -1806,9 +2067,7 @@ public CRP_AdminActionWarn(
         CRP_ADMIN_WARNING_LIMIT
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -1817,9 +2076,7 @@ public CRP_AdminActionWarn(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1844,8 +2101,8 @@ public CRP_AdminActionUnwarn(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1870,12 +2127,15 @@ public CRP_AdminActionUnwarn(
         count--;
     }
 
-    CRP_AdminActionsWriteWarning(
+    if(!CRP_AdminActionsWriteWarning(
         character,
         count,
         adminName,
         "Warning dikurangi"
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -1887,9 +2147,7 @@ public CRP_AdminActionUnwarn(
         CRP_ADMIN_WARNING_LIMIT
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -1919,8 +2177,8 @@ public CRP_AdminActionJail(
     if(minutes <= 0)
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -1939,16 +2197,23 @@ public CRP_AdminActionJail(
         CRP_AdminActionsGetTime() +
         (minutes * 60);
 
-    CRP_AdminActionsWriteJail(
+    if(!CRP_AdminActionsWriteJail(
         character,
         endTime,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     gCRP_AdminJailEnd[targetid] = endTime;
 
     CRP_AdminActionsApplyOOCJail(
+        targetid
+    );
+
+    CRP_AdminActionsStartJailTimer(
         targetid
     );
 
@@ -1960,9 +2225,7 @@ public CRP_AdminActionJail(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -1971,9 +2234,7 @@ public CRP_AdminActionJail(
         minutes
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -1982,9 +2243,7 @@ public CRP_AdminActionJail(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2011,7 +2270,7 @@ public CRP_AdminActionOfflineJail(
     if(minutes <= 0)
         return 0;
 
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -2024,12 +2283,15 @@ public CRP_AdminActionOfflineJail(
         CRP_AdminActionsGetTime() +
         (minutes * 60);
 
-    CRP_AdminActionsWriteJail(
+    if(!CRP_AdminActionsWriteJail(
         character,
         endTime,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -2039,9 +2301,7 @@ public CRP_AdminActionOfflineJail(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -2050,9 +2310,7 @@ public CRP_AdminActionOfflineJail(
         minutes
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -2061,9 +2319,7 @@ public CRP_AdminActionOfflineJail(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2088,8 +2344,8 @@ public CRP_AdminActionUnjail(
     if(!IsPlayerConnected(targetid))
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -2104,14 +2360,17 @@ public CRP_AdminActionUnjail(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteJail(
+    if(!CRP_AdminActionsWriteJail(
         character,
         0,
         adminName,
         "OOC Admin Jail dibuka"
-    );
+    ))
+    {
+        return 0;
+    }
 
-    gCRP_AdminJailEnd[targetid] = 0;
+    gCRP_AdminJailed[targetid] = false;
 
     CRP_AdminActionsReleaseOOCJail(
         targetid
@@ -2125,9 +2384,7 @@ public CRP_AdminActionUnjail(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2157,8 +2414,8 @@ public CRP_AdminActionTBan(
     if(minutes <= 0)
         return 0;
 
-    new character[64];
-    new adminName[64];
+    new character[CRP_ADMIN_ACTION_MAX_CHARACTER];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetCharacter(
@@ -2177,13 +2434,16 @@ public CRP_AdminActionTBan(
         CRP_AdminActionsGetTime() +
         (minutes * 60);
 
-    CRP_AdminActionsWriteBan(
+    if(!CRP_AdminActionsWriteBan(
         character,
         2,
         expires,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -2193,9 +2453,7 @@ public CRP_AdminActionTBan(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -2204,9 +2462,7 @@ public CRP_AdminActionTBan(
         minutes
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -2215,9 +2471,7 @@ public CRP_AdminActionTBan(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2226,9 +2480,7 @@ public CRP_AdminActionTBan(
         reason
     );
 
-    Kick(
-        targetid
-    );
+    Kick(targetid);
 
     return 1;
 }
@@ -2244,7 +2496,7 @@ public CRP_AdminActionBlockUser(
     const reason[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -2253,12 +2505,15 @@ public CRP_AdminActionBlockUser(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteBlock(
+    if(!CRP_AdminActionsWriteBlock(
         account,
         1,
         adminName,
         reason
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -2268,9 +2523,7 @@ public CRP_AdminActionBlockUser(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     format(
         message,
@@ -2279,9 +2532,7 @@ public CRP_AdminActionBlockUser(
         reason
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2303,7 +2554,7 @@ public CRP_AdminActionUnblock(
     const account[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -2312,12 +2563,15 @@ public CRP_AdminActionUnblock(
         sizeof(adminName)
     );
 
-    CRP_AdminActionsWriteBlock(
+    if(!CRP_AdminActionsWriteBlock(
         account,
         0,
         adminName,
         "Account block dibuka"
-    );
+    ))
+    {
+        return 0;
+    }
 
     format(
         message,
@@ -2327,9 +2581,7 @@ public CRP_AdminActionUnblock(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
@@ -2351,7 +2603,7 @@ public CRP_AdminActionCharacterRemove(
     const character[]
 )
 {
-    new adminName[64];
+    new adminName[CRP_ADMIN_ACTION_MAX_ADMIN];
     new message[256];
 
     CRP_AdminActionsGetAdminName(
@@ -2374,9 +2626,7 @@ public CRP_AdminActionCharacterRemove(
         adminName
     );
 
-    CRP_AdminActionsBroadcast(
-        message
-    );
+    CRP_AdminActionsBroadcast(message);
 
     CRP_AdminActionsLog(
         actorid,
