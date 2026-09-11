@@ -2,13 +2,13 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Admin Panel System v3.0
+// Admin Panel System v3.1
 //
 // File      : filterscripts/features/crp_admin.pwn
 // Developer : Muhammad Rizal
 // Project   : Crystal Roleplay
 //
-// Fokus v3.0:
+// Fokus v3.1:
 // - Admin Panel Foundation
 // - Account Username Identity
 // - RankName + Account Username Admin Identity
@@ -16,6 +16,9 @@
 // - Admin List
 // - Duty Online
 // - Admins
+// - My Bans
+// - Character Ban Management
+// - UCP Ban / Block Management
 // - Logs
 // - Ban / Kick / Jail / Warning / Mute / Reports
 // - Faction and Families Logs
@@ -25,6 +28,7 @@
 // - Faction Handler
 // - Families Handler
 // - Houses & Business Handler
+// - Account-based Handler Assignment
 // - Developer Protection
 // - Hierarchy Protection
 // - Handler Access Protection
@@ -38,7 +42,7 @@
 // Command implementation belongs to:
 // filterscripts/features/crp_admin_cmd.pwn
 //
-// Persistent log implementation belongs to:
+// Persistent log / ban implementation belongs to:
 // filterscripts/features/crp_admin_logs.pwn
 //
 // No Archives.
@@ -129,16 +133,20 @@
 #define ADMIN_PANEL_LIST            2
 #define ADMIN_PANEL_DUTY            3
 #define ADMIN_PANEL_ADMINS          4
-#define ADMIN_PANEL_LOGS            5
-#define ADMIN_PANEL_REPORTS         6
-#define ADMIN_PANEL_ADMIN_SETTINGS  7
-#define ADMIN_PANEL_MONEY_SETTINGS 8
-#define ADMIN_PANEL_ADMIN_DIVISION  9
-#define ADMIN_PANEL_FACTION         10
-#define ADMIN_PANEL_FAMILIES        11
-#define ADMIN_PANEL_HOUSE_BUSINESS  12
-#define ADMIN_PANEL_LOG_FACTION     13
-#define ADMIN_PANEL_LOG_FAMILIES    14
+#define ADMIN_PANEL_MY_BANS         5
+#define ADMIN_PANEL_LOGS            6
+#define ADMIN_PANEL_REPORTS         7
+#define ADMIN_PANEL_ADMIN_SETTINGS  8
+#define ADMIN_PANEL_MONEY_SETTINGS 9
+#define ADMIN_PANEL_ADMIN_DIVISION  10
+#define ADMIN_PANEL_FACTION_DIV     11
+#define ADMIN_PANEL_FAMILIES        12
+#define ADMIN_PANEL_HOUSE_BUSINESS  13
+#define ADMIN_PANEL_LOG_FACTION     14
+#define ADMIN_PANEL_LOG_FAMILIES    15
+#define ADMIN_PANEL_FACTION_LIST    16
+#define ADMIN_PANEL_HANDLER_LIST    17
+#define ADMIN_PANEL_HANDLER_CONFIRM 18
 
 
 // ============================================================
@@ -169,6 +177,23 @@
 
 
 // ============================================================
+// MY BANS TYPE
+// ============================================================
+
+#define ADMIN_MY_BANS_CHARACTER     1
+#define ADMIN_MY_BANS_UCP           2
+
+
+// ============================================================
+// MY BANS ACTION
+// ============================================================
+
+#define ADMIN_BAN_ACTION_NONE       0
+#define ADMIN_BAN_ACTION_UNBAN      1
+#define ADMIN_BAN_ACTION_UNBLOCK    2
+
+
+// ============================================================
 // LIMITS
 // ============================================================
 
@@ -183,13 +208,6 @@
 // ============================================================
 // PLAYER ADMIN DATA
 // ============================================================
-//
-// Runtime only.
-//
-// Persistence of Admin Rank will be handled later through
-// Account Storage when explicitly integrated.
-//
-// ============================================================
 
 new gPlayerAdminRank[MAX_PLAYERS];
 
@@ -203,25 +221,30 @@ new gPlayerAdminPanel[MAX_PLAYERS];
 
 
 // ============================================================
-// ADMIN DIVISION DATA
+// ACCOUNT-BASED HANDLER DATA
 // ============================================================
 //
-// Handler assignment is account based.
+// IMPORTANT:
 //
-// A handler must already have minimum Admin Level 6.
+// Handler assignment is based on Account Username.
+// It is NOT based on Player ID.
 //
-// Rank 9 / Rank 10 only may manage handlers.
+// This means disconnecting does NOT remove the handler
+// assignment.
+//
+// Runtime faction/family membership remains player/session
+// based until the relevant faction/family storage is integrated.
 //
 // ============================================================
 
-new gFactionFamilyHandler[MAX_PLAYERS];
-new gHouseBusinessHandler[MAX_PLAYERS];
+new gFactionFamilyHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
+new gHouseBusinessHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
 
-new gFactionHandlerID[5];
-new gFamilyHandlerID[11];
+new gFactionHandlerAccount[5][ADMIN_USERNAME_LENGTH];
+new gFamilyHandlerAccount[11][ADMIN_USERNAME_LENGTH];
 
-new gHouseHandlerID;
-new gBusinessHandlerID;
+new gHouseHandlerAccount[ADMIN_USERNAME_LENGTH];
+new gBusinessHandlerAccount[ADMIN_USERNAME_LENGTH];
 
 new gPlayerActiveFaction[MAX_PLAYERS];
 new gPlayerActiveFamily[MAX_PLAYERS];
@@ -232,36 +255,48 @@ new gPlayerActiveFamily[MAX_PLAYERS];
 // ============================================================
 
 new gSelectedAdminTarget[MAX_PLAYERS];
+
 new gSelectedHandlerTarget[MAX_PLAYERS];
+new gSelectedHandlerDivision[MAX_PLAYERS];
 
 new gSelectedFaction[MAX_PLAYERS];
 new gSelectedFamily[MAX_PLAYERS];
+
+new gSelectedMyBanType[MAX_PLAYERS];
+new gSelectedMyBanAction[MAX_PLAYERS];
 
 
 // ============================================================
 // DIALOG IDS
 // ============================================================
 
-#define DIALOG_ADMIN_MAIN              3000
-#define DIALOG_ADMIN_LIST              3001
-#define DIALOG_ADMIN_DUTY              3002
-#define DIALOG_ADMIN_ADMINS            3003
-#define DIALOG_ADMIN_LOGS              3004
-#define DIALOG_ADMIN_REPORTS           3005
+#define DIALOG_ADMIN_MAIN                  3000
+#define DIALOG_ADMIN_LIST                  3001
+#define DIALOG_ADMIN_DUTY                  3002
+#define DIALOG_ADMIN_ADMINS                3003
+#define DIALOG_ADMIN_MY_BANS               3004
+#define DIALOG_ADMIN_LOGS                  3005
+#define DIALOG_ADMIN_REPORTS               3006
 
-#define DIALOG_ADMIN_SETTINGS          3010
-#define DIALOG_ADMIN_MONEY_SETTINGS    3011
-#define DIALOG_ADMIN_DIVISION          3012
+#define DIALOG_ADMIN_SETTINGS              3010
+#define DIALOG_ADMIN_MONEY_SETTINGS        3011
+#define DIALOG_ADMIN_DIVISION              3012
 
-#define DIALOG_ADMIN_FACTION           3020
-#define DIALOG_ADMIN_FAMILIES          3021
-#define DIALOG_ADMIN_HOUSE_BUSINESS    3022
+#define DIALOG_ADMIN_FACTION_DIV           3020
+#define DIALOG_ADMIN_FAMILIES              3021
+#define DIALOG_ADMIN_HOUSE_BUSINESS        3022
+#define DIALOG_ADMIN_FACTION_LIST          3023
 
-#define DIALOG_ADMIN_LOG_FACTION       3030
-#define DIALOG_ADMIN_LOG_FAMILIES      3031
+#define DIALOG_ADMIN_LOG_FACTION           3030
+#define DIALOG_ADMIN_LOG_FAMILIES          3031
 
-#define DIALOG_ADMIN_HANDLER_LIST      3040
-#define DIALOG_ADMIN_HANDLER_CONFIRM   3041
+#define DIALOG_ADMIN_HANDLER_LIST          3040
+#define DIALOG_ADMIN_HANDLER_CONFIRM       3041
+
+#define DIALOG_ADMIN_MY_BANS_CHARACTER     3050
+#define DIALOG_ADMIN_MY_BANS_UCP           3051
+#define DIALOG_ADMIN_MY_BANS_ACTION        3052
+#define DIALOG_ADMIN_MY_BANS_CONFIRM       3053
 
 
 // ============================================================
@@ -269,15 +304,19 @@ new gSelectedFamily[MAX_PLAYERS];
 // ============================================================
 
 forward CRP_AdminOpenPanel(playerid);
+
 forward CRP_AdminGetRank(playerid);
 forward CRP_AdminIsStaffRemote(playerid);
 forward CRP_AdminIsDeveloperRemote(playerid);
 forward CRP_AdminCanTargetRemote(actorid, targetid);
+
 forward CRP_AdminGetDivision(playerid);
 forward CRP_AdminGetFaction(playerid);
 forward CRP_AdminGetFamily(playerid);
 forward CRP_AdminGetHandlerType(playerid);
+
 forward CRP_AdminGetAccountUsername(playerid, output[], size);
+
 forward CRP_AdminSetRankRemote(playerid, rank);
 forward CRP_AdminSetFactionRemote(playerid, faction);
 forward CRP_AdminSetFamilyRemote(playerid, family);
@@ -439,9 +478,7 @@ stock CRP_AdminIsDirector(playerid)
 // DEVELOPER INTERNAL SETTER
 // ============================================================
 //
-// This function is NOT exposed as a command.
-//
-// Rank 10 must never be assigned through normal Admin Settings.
+// Rank 10 cannot be assigned through normal Admin Settings.
 //
 // ============================================================
 
@@ -490,7 +527,7 @@ stock CRP_AdminCanTarget(actorid, targetid)
         return 0;
     }
 
-    // Developer may target lower ranks.
+    // Developer can target lower ranks.
     if(CRP_AdminIsDeveloper(actorid))
     {
         return 1;
@@ -508,12 +545,6 @@ stock CRP_AdminCanTarget(actorid, targetid)
 
 // ============================================================
 // ADMIN SETTINGS ACCESS
-// ============================================================
-//
-// Only:
-// Rank 10 Developer
-// Rank 9 Server Director
-//
 // ============================================================
 
 stock CRP_AdminCanAccessAdminSettings(playerid)
@@ -535,10 +566,6 @@ stock CRP_AdminCanAccessAdminSettings(playerid)
 // ============================================================
 // MONEY SETTINGS ACCESS
 // ============================================================
-//
-// Only Rank 9 / Rank 10.
-//
-// ============================================================
 
 stock CRP_AdminCanAccessMoneySettings(playerid)
 {
@@ -558,12 +585,6 @@ stock CRP_AdminCanAccessMoneySettings(playerid)
 
 // ============================================================
 // ADMIN DIVISION ACCESS
-// ============================================================
-//
-// Only Rank 9 / Rank 10.
-//
-// Handler-specific menus are checked separately.
-//
 // ============================================================
 
 stock CRP_AdminCanAccessAdminDivision(playerid)
@@ -593,13 +614,13 @@ stock CRP_AdminCanBecomeHandler(playerid)
         return 0;
     }
 
-    // Handler must be at least Admin Level 6.
+    // Minimum Rank 6.
     if(gPlayerAdminRank[playerid] < ADMIN_SUPERVISOR)
     {
         return 0;
     }
 
-    // Developer protection.
+    // Developer cannot become a normal handler.
     if(CRP_AdminIsDeveloper(playerid))
     {
         return 0;
@@ -610,8 +631,137 @@ stock CRP_AdminCanBecomeHandler(playerid)
 
 
 // ============================================================
-// HANDLER ACCESS
+// STRING ACCOUNT HELPER
 // ============================================================
+
+stock CRP_AdminIsAccountEmpty(const account[])
+{
+    if(account[0] == EOS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+
+stock CRP_AdminFindOnlineAccount(const account[])
+{
+    for(new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if(!CRP_AdminIsValidPlayer(i))
+        {
+            continue;
+        }
+
+        if(!strcmp(
+            gPlayerAccountUsername[i],
+            account,
+            true
+        ))
+        {
+            return i;
+        }
+    }
+
+    return INVALID_PLAYER_ID;
+}
+
+
+// ============================================================
+// HANDLER ACCOUNT STORAGE HELPERS
+// ============================================================
+
+stock CRP_AdminSetHandlerAccount(
+    division,
+    slot,
+    const account[]
+)
+{
+    if(division == ADMIN_DIVISION_FACTION_FAMILY)
+    {
+        if(slot < 0 || slot >= ADMIN_HANDLER_MAX)
+        {
+            return 0;
+        }
+
+        format(
+            gFactionFamilyHandlerAccount[slot],
+            ADMIN_USERNAME_LENGTH,
+            "%s",
+            account
+        );
+
+        return 1;
+    }
+
+    if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
+    {
+        if(slot < 0 || slot >= ADMIN_HANDLER_MAX)
+        {
+            return 0;
+        }
+
+        format(
+            gHouseBusinessHandlerAccount[slot],
+            ADMIN_USERNAME_LENGTH,
+            "%s",
+            account
+        );
+
+        return 1;
+    }
+
+    return 0;
+}
+
+
+stock CRP_AdminRemoveHandlerAccount(
+    division,
+    const account[]
+)
+{
+    if(division == ADMIN_DIVISION_FACTION_FAMILY)
+    {
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                !strcmp(
+                    gFactionFamilyHandlerAccount[i],
+                    account,
+                    true
+                )
+            )
+            {
+                gFactionFamilyHandlerAccount[i][0] = EOS;
+            }
+        }
+
+        return 1;
+    }
+
+    if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
+    {
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                !strcmp(
+                    gHouseBusinessHandlerAccount[i],
+                    account,
+                    true
+                )
+            )
+            {
+                gHouseBusinessHandlerAccount[i][0] = EOS;
+            }
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
 
 stock CRP_AdminIsFactionFamilyHandler(playerid)
 {
@@ -620,7 +770,21 @@ stock CRP_AdminIsFactionFamilyHandler(playerid)
         return 0;
     }
 
-    return gFactionFamilyHandler[playerid] == 1;
+    for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+    {
+        if(
+            !strcmp(
+                gFactionFamilyHandlerAccount[i],
+                gPlayerAccountUsername[playerid],
+                true
+            )
+        )
+        {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 
@@ -631,67 +795,62 @@ stock CRP_AdminIsHouseBusinessHandler(playerid)
         return 0;
     }
 
-    return gHouseBusinessHandler[playerid] == 1;
+    for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+    {
+        if(
+            !strcmp(
+                gHouseBusinessHandlerAccount[i],
+                gPlayerAccountUsername[playerid],
+                true
+            )
+        )
+        {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 
 // ============================================================
-// ADMIN LIST DISPLAY
+// HANDLER LIST COUNT
 // ============================================================
 
-stock CRP_AdminBuildList(output[], size)
+stock CRP_AdminGetHandlerCount(division)
 {
-    output[0] = EOS;
+    new count = 0;
 
-    strcat(
-        output,
-        "Account Username\tRank\tDuty\n"
-    );
-
-    for(new i = 0; i < MAX_PLAYERS; i++)
+    if(division == ADMIN_DIVISION_FACTION_FAMILY)
     {
-        if(!CRP_AdminIsValidPlayer(i))
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            continue;
+            if(
+                !CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                )
+            )
+            {
+                count++;
+            }
         }
-
-        if(!CRP_AdminIsStaff(i))
+    }
+    else if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
+    {
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            continue;
+            if(
+                !CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                )
+            )
+            {
+                count++;
+            }
         }
-
-        new rankname[ADMIN_RANKNAME_LENGTH];
-        new dutyname[16];
-        new line[96];
-
-        CRP_GetAdminRankName(
-            gPlayerAdminRank[i],
-            rankname,
-            sizeof(rankname)
-        );
-
-        if(gPlayerAdminDuty[i])
-        {
-            format(dutyname, sizeof(dutyname), "ON");
-        }
-        else
-        {
-            format(dutyname, sizeof(dutyname), "OFF");
-        }
-
-        format(
-            line,
-            sizeof(line),
-            "%s\t%s\t%s\n",
-            gPlayerAccountUsername[i],
-            rankname,
-            dutyname
-        );
-
-        strcat(output, line);
     }
 
-    return 1;
+    return count;
 }
 
 
@@ -720,16 +879,16 @@ stock CRP_AdminGetDutySeconds(playerid)
 // ============================================================
 // DUTY ON
 // ============================================================
-//
-// Command itself will be triggered by crp_admin_cmd.pwn.
-//
-// This function remains here as the central runtime state owner.
-//
-// ============================================================
 
 stock CRP_AdminDutyOn(playerid)
 {
     if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    // Intern Staff has no Admin Duty.
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
     {
         return 0;
     }
@@ -753,6 +912,11 @@ stock CRP_AdminDutyOn(playerid)
 stock CRP_AdminDutyOff(playerid)
 {
     if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
     {
         return 0;
     }
@@ -823,7 +987,11 @@ stock CRP_AdminSendChat(playerid, const message[])
             continue;
         }
 
-        SendClientMessage(i, COLOR_WHITE, output);
+        SendClientMessage(
+            i,
+            COLOR_WHITE,
+            output
+        );
     }
 
     return 1;
@@ -832,6 +1000,22 @@ stock CRP_AdminSendChat(playerid, const message[])
 
 // ============================================================
 // MAIN PANEL
+// ============================================================
+//
+// R1:
+// - Admin List
+// - Admins
+// - My Bans is hidden because My Bans requires R2.
+//
+// R2+:
+// - Admin Duty
+// - My Bans
+//
+// R9+:
+// - Admin Settings
+// - Money Settings
+// - Admin Division
+//
 // ============================================================
 
 stock CRP_AdminShowMainPanel(playerid)
@@ -843,17 +1027,46 @@ stock CRP_AdminShowMainPanel(playerid)
 
     new list[ADMIN_DIALOG_SIZE];
 
-    format(
+    list[0] = EOS;
+
+    strcat(
         list,
-        sizeof(list),
-        "Admin List\n\
-        Admin Duty\n\
-        Admins\n\
-        Logs\n\
-        Reports"
+        "Admin List\n"
     );
 
-    // Rank 9 / 10 only.
+    // R2+ only.
+    if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+    {
+        strcat(
+            list,
+            "Admin Duty\n"
+        );
+    }
+
+    strcat(
+        list,
+        "Admins\n"
+    );
+
+    // My Bans R2+.
+    if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+    {
+        strcat(
+            list,
+            "My Bans\n"
+        );
+    }
+
+    strcat(
+        list,
+        "Logs\n"
+    );
+
+    strcat(
+        list,
+        "Reports"
+    );
+
     if(CRP_AdminCanAccessAdminSettings(playerid))
     {
         strcat(
@@ -862,7 +1075,6 @@ stock CRP_AdminShowMainPanel(playerid)
         );
     }
 
-    // Rank 9 / 10 only.
     if(CRP_AdminCanAccessMoneySettings(playerid))
     {
         strcat(
@@ -871,7 +1083,6 @@ stock CRP_AdminShowMainPanel(playerid)
         );
     }
 
-    // Rank 9 / 10 only.
     if(CRP_AdminCanAccessAdminDivision(playerid))
     {
         strcat(
@@ -898,6 +1109,15 @@ stock CRP_AdminShowMainPanel(playerid)
 
 // ============================================================
 // ADMIN LIST PANEL
+// ============================================================
+//
+// Intern Staff remains visible while OFF DUTY.
+//
+// OFF DUTY is represented by:
+// OFF
+//
+// Duty time remains 0 when not on duty.
+//
 // ============================================================
 
 stock CRP_AdminShowList(playerid)
@@ -930,13 +1150,98 @@ stock CRP_AdminShowList(playerid)
 }
 
 
+stock CRP_AdminBuildList(output[], size)
+{
+    output[0] = EOS;
+
+    format(
+        output,
+        size,
+        "Account Username\tRank\tDuty\tTime\n"
+    );
+
+    for(new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if(!CRP_AdminIsValidPlayer(i))
+        {
+            continue;
+        }
+
+        if(!CRP_AdminIsStaff(i))
+        {
+            continue;
+        }
+
+        new rankname[ADMIN_RANKNAME_LENGTH];
+        new dutyname[16];
+        new line[128];
+
+        CRP_GetAdminRankName(
+            gPlayerAdminRank[i],
+            rankname,
+            sizeof(rankname)
+        );
+
+        if(gPlayerAdminDuty[i])
+        {
+            format(
+                dutyname,
+                sizeof(dutyname),
+                "ON"
+            );
+        }
+        else
+        {
+            format(
+                dutyname,
+                sizeof(dutyname),
+                "OFF"
+            );
+        }
+
+        new seconds = CRP_AdminGetDutySeconds(i);
+        new hours = seconds / 3600;
+        new minutes = (seconds % 3600) / 60;
+
+        format(
+            line,
+            sizeof(line),
+            "%s\t%s\t%s\t%02d:%02d\n",
+            gPlayerAccountUsername[i],
+            rankname,
+            dutyname,
+            hours,
+            minutes
+        );
+
+        strcat(
+            output,
+            line
+        );
+    }
+
+    return 1;
+}
+
+
 // ============================================================
 // DUTY ONLINE
+// ============================================================
+//
+// Only R2+ can access this panel.
+//
+// Intern Staff has no duty.
+//
 // ============================================================
 
 stock CRP_AdminShowDuty(playerid)
 {
     if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
     {
         return 0;
     }
@@ -981,7 +1286,10 @@ stock CRP_AdminShowDuty(playerid)
             minutes
         );
 
-        strcat(list, line);
+        strcat(
+            list,
+            line
+        );
     }
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_DUTY;
@@ -1003,6 +1311,13 @@ stock CRP_AdminShowDuty(playerid)
 // ============================================================
 // ADMINS
 // ============================================================
+//
+// This is the general staff list.
+//
+// Intern Staff appears even when OFF DUTY.
+// Their duty time is 0 while not on duty.
+//
+// ============================================================
 
 stock CRP_AdminShowAdmins(playerid)
 {
@@ -1016,7 +1331,7 @@ stock CRP_AdminShowAdmins(playerid)
     format(
         list,
         sizeof(list),
-        "Rank\tAccount Username\tStatus\n"
+        "Rank\tAccount Username\tStatus\tDuty Time\n"
     );
 
     for(new i = 0; i < MAX_PLAYERS; i++)
@@ -1033,7 +1348,7 @@ stock CRP_AdminShowAdmins(playerid)
 
         new rankname[ADMIN_RANKNAME_LENGTH];
         new status[16];
-        new line[128];
+        new line[160];
 
         CRP_GetAdminRankName(
             gPlayerAdminRank[i],
@@ -1043,23 +1358,40 @@ stock CRP_AdminShowAdmins(playerid)
 
         if(gPlayerAdminDuty[i])
         {
-            format(status, sizeof(status), "ON DUTY");
+            format(
+                status,
+                sizeof(status),
+                "ON DUTY"
+            );
         }
         else
         {
-            format(status, sizeof(status), "OFF DUTY");
+            format(
+                status,
+                sizeof(status),
+                "OFF DUTY"
+            );
         }
+
+        new seconds = CRP_AdminGetDutySeconds(i);
+        new hours = seconds / 3600;
+        new minutes = (seconds % 3600) / 60;
 
         format(
             line,
             sizeof(line),
-            "%s\t%s\t%s\n",
+            "%s\t%s\t%s\t%02d:%02d\n",
             rankname,
             gPlayerAccountUsername[i],
-            status
+            status,
+            hours,
+            minutes
         );
 
-        strcat(list, line);
+        strcat(
+            list,
+            line
+        );
     }
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMINS;
@@ -1075,6 +1407,266 @@ stock CRP_AdminShowAdmins(playerid)
     );
 
     return 1;
+}
+
+
+// ============================================================
+// MY BANS MAIN
+// ============================================================
+
+stock CRP_AdminShowMyBans(playerid)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    {
+        return 0;
+    }
+
+    new list[256];
+
+    format(
+        list,
+        sizeof(list),
+        "Character\n\
+        UCP"
+    );
+
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_MY_BANS,
+        DIALOG_STYLE_LIST,
+        "MY BANS",
+        list,
+        "PILIH",
+        "KEMBALI"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// MY BANS CHARACTER
+// ============================================================
+//
+// Persistent data is provided by crp_admin_logs.pwn.
+//
+// Only records created by this Account Username are shown.
+//
+// ============================================================
+
+stock CRP_AdminShowMyCharacterBans(playerid)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    {
+        return 0;
+    }
+
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+
+    CallRemoteFunction(
+        "CRP_AdminLogsOpenMyBansCharacter",
+        "i",
+        playerid
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// MY BANS UCP
+// ============================================================
+//
+// Persistent data is provided by crp_admin_logs.pwn.
+//
+// UCP record can expose:
+// - Unblock
+// - Unban
+// - Batal
+//
+// The actual status update remains owned by the log/punishment
+// system.
+//
+// ============================================================
+
+stock CRP_AdminShowMyUCPBans(playerid)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    {
+        return 0;
+    }
+
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+
+    CallRemoteFunction(
+        "CRP_AdminLogsOpenMyBansUCP",
+        "i",
+        playerid
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// MY BAN ACTION ROUTER
+// ============================================================
+//
+// This public can be called by crp_admin_logs.pwn after a
+// selected record has been chosen.
+//
+// type:
+// ADMIN_MY_BANS_CHARACTER
+// ADMIN_MY_BANS_UCP
+//
+// action:
+// ADMIN_BAN_ACTION_UNBAN
+// ADMIN_BAN_ACTION_UNBLOCK
+//
+// ============================================================
+
+forward CRP_AdminMyBanAction(
+    playerid,
+    type,
+    action
+);
+
+public CRP_AdminMyBanAction(
+    playerid,
+    type,
+    action
+)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    {
+        return 0;
+    }
+
+    gSelectedMyBanType[playerid] = type;
+    gSelectedMyBanAction[playerid] = action;
+
+    new actionname[32];
+
+    if(action == ADMIN_BAN_ACTION_UNBAN)
+    {
+        format(
+            actionname,
+            sizeof(actionname),
+            "Unban"
+        );
+    }
+    else if(action == ADMIN_BAN_ACTION_UNBLOCK)
+    {
+        format(
+            actionname,
+            sizeof(actionname),
+            "Unblock"
+        );
+    }
+    else
+    {
+        return 0;
+    }
+
+    new message[256];
+
+    format(
+        message,
+        sizeof(message),
+        "%s\n\nApakah Anda yakin ingin menjalankan tindakan ini?",
+        actionname
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_MY_BANS_CONFIRM,
+        DIALOG_STYLE_MSGBOX,
+        "KONFIRMASI",
+        message,
+        "KONFIRMASI",
+        "BATAL"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// MY BAN CONFIRMATION
+// ============================================================
+
+stock CRP_AdminConfirmMyBanAction(playerid)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    new type = gSelectedMyBanType[playerid];
+    new action = gSelectedMyBanAction[playerid];
+
+    if(type == ADMIN_MY_BANS_CHARACTER)
+    {
+        if(action != ADMIN_BAN_ACTION_UNBAN)
+        {
+            return 0;
+        }
+
+        CallRemoteFunction(
+            "CRP_AdminLogsExecuteMyBanAction",
+            "iii",
+            playerid,
+            type,
+            action
+        );
+
+        return 1;
+    }
+
+    if(type == ADMIN_MY_BANS_UCP)
+    {
+        if(
+            action != ADMIN_BAN_ACTION_UNBAN &&
+            action != ADMIN_BAN_ACTION_UNBLOCK
+        )
+        {
+            return 0;
+        }
+
+        CallRemoteFunction(
+            "CRP_AdminLogsExecuteMyBanAction",
+            "iii",
+            playerid,
+            type,
+            action
+        );
+
+        return 1;
+    }
+
+    return 0;
 }
 
 
@@ -1130,9 +1722,6 @@ stock CRP_AdminShowReportLogs(playerid)
         return 0;
     }
 
-    // Report persistence is owned by crp_admin_logs.pwn.
-    // This panel only routes the UI request.
-
     CallRemoteFunction(
         "CRP_AdminLogsOpenReportLogs",
         "i",
@@ -1153,9 +1742,6 @@ stock CRP_AdminShowFactionFamilyLogs(playerid)
     {
         return 0;
     }
-
-    // Rank 9 / 10 may access.
-    // Assigned handlers may access relevant logs.
 
     if(
         gPlayerAdminRank[playerid] < ADMIN_SERVER_DIRECTOR &&
@@ -1236,6 +1822,11 @@ stock CRP_AdminShowAdminSettings(playerid)
 // ============================================================
 // MONEY SETTINGS
 // ============================================================
+//
+// These remain Panel features.
+// They are NOT admin commands.
+//
+// ============================================================
 
 stock CRP_AdminShowMoneySettings(playerid)
 {
@@ -1310,7 +1901,7 @@ stock CRP_AdminShowAdminDivision(playerid)
 // FACTIONS AND FAMILIES DIVISION
 // ============================================================
 
-stock CRP_AdminShowFaction(playerid)
+stock CRP_AdminShowFactionDivision(playerid)
 {
     if(!CRP_AdminCanAccessAdminDivision(playerid))
     {
@@ -1327,11 +1918,11 @@ stock CRP_AdminShowFaction(playerid)
         Handler List"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FACTION;
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FACTION_DIV;
 
     ShowPlayerDialog(
         playerid,
-        DIALOG_ADMIN_FACTION,
+        DIALOG_ADMIN_FACTION_DIV,
         DIALOG_STYLE_LIST,
         "FACTIONS AND FAMILIES",
         list,
@@ -1381,23 +1972,21 @@ stock CRP_AdminShowHouseBusiness(playerid)
 
 
 // ============================================================
-// FACTION MENU
+// FACTION LIST
 // ============================================================
 //
 // IN / OUT is for the handler themselves.
-//
-// A handler can only be IN one faction at a time.
 //
 // ============================================================
 
 stock CRP_AdminShowFactionList(playerid)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid) &&
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
-        {
-            return 0;
-        }
+        return 0;
     }
 
     new list[512];
@@ -1411,9 +2000,11 @@ stock CRP_AdminShowFactionList(playerid)
         GOV"
     );
 
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FACTION_LIST;
+
     ShowPlayerDialog(
         playerid,
-        DIALOG_ADMIN_FACTION,
+        DIALOG_ADMIN_FACTION_LIST,
         DIALOG_STYLE_LIST,
         "FACTION",
         list,
@@ -1431,12 +2022,12 @@ stock CRP_AdminShowFactionList(playerid)
 
 stock CRP_AdminShowFamilyList(playerid)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid) &&
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
-        {
-            return 0;
-        }
+        return 0;
     }
 
     new list[2048];
@@ -1475,6 +2066,12 @@ stock CRP_AdminShowFamilyList(playerid)
 // ============================================================
 // HANDLER LIST
 // ============================================================
+//
+// Handler identity is Account Username.
+//
+// It is therefore not cleared on disconnect.
+//
+// ============================================================
 
 stock CRP_AdminShowHandlerList(playerid, division)
 {
@@ -1488,19 +2085,18 @@ stock CRP_AdminShowHandlerList(playerid, division)
     format(
         list,
         sizeof(list),
-        "Handler\tDivision\n"
+        "Account Username\tDivision\n"
     );
 
     if(division == ADMIN_DIVISION_FACTION_FAMILY)
     {
-        for(new i = 0; i < MAX_PLAYERS; i++)
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(!CRP_AdminIsValidPlayer(i))
-            {
-                continue;
-            }
-
-            if(!gFactionFamilyHandler[i])
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                )
+            )
             {
                 continue;
             }
@@ -1511,22 +2107,24 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 line,
                 sizeof(line),
                 "%s\tFaction & Families\n",
-                gPlayerAccountUsername[i]
+                gFactionFamilyHandlerAccount[i]
             );
 
-            strcat(list, line);
+            strcat(
+                list,
+                line
+            );
         }
     }
     else if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
     {
-        for(new i = 0; i < MAX_PLAYERS; i++)
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(!CRP_AdminIsValidPlayer(i))
-            {
-                continue;
-            }
-
-            if(!gHouseBusinessHandler[i])
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                )
+            )
             {
                 continue;
             }
@@ -1537,14 +2135,18 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 line,
                 sizeof(line),
                 "%s\tHouses & Business\n",
-                gPlayerAccountUsername[i]
+                gHouseBusinessHandlerAccount[i]
             );
 
-            strcat(list, line);
+            strcat(
+                list,
+                line
+            );
         }
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMIN_DIVISION;
+    gSelectedHandlerDivision[playerid] = division;
+    gPlayerAdminPanel[playerid] = ADMIN_PANEL_HANDLER_LIST;
 
     ShowPlayerDialog(
         playerid,
@@ -1593,6 +2195,11 @@ stock CRP_AdminCanAssignHandler(actorid, targetid)
 // ============================================================
 // ASSIGN FACTION/FAMILY HANDLER
 // ============================================================
+//
+// The account username is stored.
+// Player ID is only used to resolve the target account.
+//
+// ============================================================
 
 stock CRP_AdminSetFactionFamilyHandler(targetid, state)
 {
@@ -1608,16 +2215,52 @@ stock CRP_AdminSetFactionFamilyHandler(targetid, state)
             return 0;
         }
 
-        gFactionFamilyHandler[targetid] = 1;
-    }
-    else
-    {
-        gFactionFamilyHandler[targetid] = 0;
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                !CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                ) &&
+                !strcmp(
+                    gFactionFamilyHandlerAccount[i],
+                    gPlayerAccountUsername[targetid],
+                    true
+                )
+            )
+            {
+                return 1;
+            }
+        }
 
-        // Leaving handler role also removes active faction/family.
-        gPlayerActiveFaction[targetid] = ADMIN_FACTION_NONE;
-        gPlayerActiveFamily[targetid] = ADMIN_FAMILY_NONE;
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                )
+            )
+            {
+                format(
+                    gFactionFamilyHandlerAccount[i],
+                    ADMIN_USERNAME_LENGTH,
+                    "%s",
+                    gPlayerAccountUsername[targetid]
+                );
+
+                return 1;
+            }
+        }
+
+        return 0;
     }
+
+    CRP_AdminRemoveHandlerAccount(
+        ADMIN_DIVISION_FACTION_FAMILY,
+        gPlayerAccountUsername[targetid]
+    );
+
+    gPlayerActiveFaction[targetid] = ADMIN_FACTION_NONE;
+    gPlayerActiveFamily[targetid] = ADMIN_FAMILY_NONE;
 
     return 1;
 }
@@ -1641,12 +2284,49 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
             return 0;
         }
 
-        gHouseBusinessHandler[targetid] = 1;
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                !CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                ) &&
+                !strcmp(
+                    gHouseBusinessHandlerAccount[i],
+                    gPlayerAccountUsername[targetid],
+                    true
+                )
+            )
+            {
+                return 1;
+            }
+        }
+
+        for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
+        {
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                )
+            )
+            {
+                format(
+                    gHouseBusinessHandlerAccount[i],
+                    ADMIN_USERNAME_LENGTH,
+                    "%s",
+                    gPlayerAccountUsername[targetid]
+                );
+
+                return 1;
+            }
+        }
+
+        return 0;
     }
-    else
-    {
-        gHouseBusinessHandler[targetid] = 0;
-    }
+
+    CRP_AdminRemoveHandlerAccount(
+        ADMIN_DIVISION_HOUSE_BUSINESS,
+        gPlayerAccountUsername[targetid]
+    );
 
     return 1;
 }
@@ -1654,14 +2334,6 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
 // ============================================================
 // FACTION IN
-// ============================================================
-//
-// Handler enters faction at Rank 10.
-// Default faction rank name:
-// Police Admin / Medical Admin / Legal Admin / Government Admin
-//
-// Only one faction at a time.
-//
 // ============================================================
 
 stock CRP_AdminFactionIn(playerid, faction)
@@ -1671,8 +2343,10 @@ stock CRP_AdminFactionIn(playerid, faction)
         return 0;
     }
 
-    if(faction < ADMIN_FACTION_LSPD ||
-       faction > ADMIN_FACTION_GOV)
+    if(
+        faction < ADMIN_FACTION_LSPD ||
+        faction > ADMIN_FACTION_GOV
+    )
     {
         return 0;
     }
@@ -1685,7 +2359,7 @@ stock CRP_AdminFactionIn(playerid, faction)
         return 0;
     }
 
-    // Cannot simultaneously be active in a family.
+    // Faction and Family are mutually exclusive.
     gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
 
     gPlayerActiveFaction[playerid] = faction;
@@ -1714,16 +2388,6 @@ stock CRP_AdminFactionOut(playerid)
 // ============================================================
 // FAMILY IN
 // ============================================================
-//
-// Family rank:
-// Level 10
-//
-// Rank name:
-// Admin:
-//
-// Only one family at a time.
-//
-// ============================================================
 
 stock CRP_AdminFamilyIn(playerid, family)
 {
@@ -1732,8 +2396,10 @@ stock CRP_AdminFamilyIn(playerid, family)
         return 0;
     }
 
-    if(family < ADMIN_FAMILY_SLOT_1 ||
-       family > ADMIN_FAMILY_SLOT_10)
+    if(
+        family < ADMIN_FAMILY_SLOT_1 ||
+        family > ADMIN_FAMILY_SLOT_10
+    )
     {
         return 0;
     }
@@ -1746,7 +2412,7 @@ stock CRP_AdminFamilyIn(playerid, family)
         return 0;
     }
 
-    // Cannot simultaneously be active in a faction.
+    // Faction and Family are mutually exclusive.
     gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
 
     gPlayerActiveFamily[playerid] = family;
@@ -1836,12 +2502,12 @@ public CRP_AdminGetDivision(playerid)
         return ADMIN_DIVISION_NONE;
     }
 
-    if(gFactionFamilyHandler[playerid])
+    if(CRP_AdminIsFactionFamilyHandler(playerid))
     {
         return ADMIN_DIVISION_FACTION_FAMILY;
     }
 
-    if(gHouseBusinessHandler[playerid])
+    if(CRP_AdminIsHouseBusinessHandler(playerid))
     {
         return ADMIN_DIVISION_HOUSE_BUSINESS;
     }
@@ -1894,12 +2560,17 @@ public CRP_AdminGetHandlerType(playerid)
         return ADMIN_HANDLER_NONE;
     }
 
-    if(gFactionFamilyHandler[playerid])
+    if(CRP_AdminIsFactionFamilyHandler(playerid))
     {
+        if(gPlayerActiveFamily[playerid] != ADMIN_FAMILY_NONE)
+        {
+            return ADMIN_HANDLER_FAMILY;
+        }
+
         return ADMIN_HANDLER_FACTION;
     }
 
-    if(gHouseBusinessHandler[playerid])
+    if(CRP_AdminIsHouseBusinessHandler(playerid))
     {
         return ADMIN_HANDLER_HOUSE;
     }
@@ -1941,8 +2612,11 @@ public CRP_AdminGetAccountUsername(
 // SET RANK
 // ============================================================
 //
-// Rank 10 is intentionally blocked here.
-// Developer must only be set internally.
+// Rank 10 is blocked here.
+// Developer can only be assigned internally.
+//
+// The actual promotion/demotion validation belongs to
+// crp_admin_cmd.pwn.
 //
 // ============================================================
 
@@ -1953,7 +2627,10 @@ public CRP_AdminSetRankRemote(playerid, rank)
         return 0;
     }
 
-    if(rank < ADMIN_NO_STAFF || rank >= ADMIN_DEVELOPER)
+    if(
+        rank < ADMIN_NO_STAFF ||
+        rank >= ADMIN_DEVELOPER
+    )
     {
         return 0;
     }
@@ -2009,32 +2686,122 @@ public OnDialogResponse(
         return 0;
     }
 
+
+    // ========================================================
+    // CANCEL / BACK
+    // ========================================================
+
     if(!response)
     {
-        // Main panel closed.
-        if(dialogid == DIALOG_ADMIN_MAIN)
+        switch(dialogid)
         {
-            gPlayerAdminPanel[playerid] = ADMIN_PANEL_NONE;
-            return 1;
-        }
+            case DIALOG_ADMIN_MAIN:
+            {
+                gPlayerAdminPanel[playerid] =
+                    ADMIN_PANEL_NONE;
 
-        // Return to main panel for navigation dialogs.
-        if(
-            dialogid == DIALOG_ADMIN_LIST ||
-            dialogid == DIALOG_ADMIN_DUTY ||
-            dialogid == DIALOG_ADMIN_ADMINS ||
-            dialogid == DIALOG_ADMIN_LOGS ||
-            dialogid == DIALOG_ADMIN_REPORTS ||
-            dialogid == DIALOG_ADMIN_SETTINGS ||
-            dialogid == DIALOG_ADMIN_MONEY_SETTINGS ||
-            dialogid == DIALOG_ADMIN_DIVISION ||
-            dialogid == DIALOG_ADMIN_FACTION ||
-            dialogid == DIALOG_ADMIN_FAMILIES ||
-            dialogid == DIALOG_ADMIN_HOUSE_BUSINESS
-        )
-        {
-            CRP_AdminShowMainPanel(playerid);
-            return 1;
+                return 1;
+            }
+
+            case DIALOG_ADMIN_MY_BANS:
+            case DIALOG_ADMIN_LOGS:
+            case DIALOG_ADMIN_SETTINGS:
+            case DIALOG_ADMIN_MONEY_SETTINGS:
+            case DIALOG_ADMIN_DIVISION:
+            {
+                CRP_AdminShowMainPanel(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_LIST:
+            case DIALOG_ADMIN_DUTY:
+            case DIALOG_ADMIN_ADMINS:
+            case DIALOG_ADMIN_REPORTS:
+            {
+                CRP_AdminShowMainPanel(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_FACTION_DIV:
+            case DIALOG_ADMIN_HOUSE_BUSINESS:
+            {
+                CRP_AdminShowAdminDivision(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_FACTION_LIST:
+            case DIALOG_ADMIN_FAMILIES:
+            {
+                CRP_AdminShowFactionDivision(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_LOG_FACTION:
+            {
+                CRP_AdminShowLogs(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_HANDLER_LIST:
+            {
+                if(
+                    gSelectedHandlerDivision[playerid] ==
+                    ADMIN_DIVISION_FACTION_FAMILY
+                )
+                {
+                    CRP_AdminShowFactionDivision(playerid);
+                }
+                else if(
+                    gSelectedHandlerDivision[playerid] ==
+                    ADMIN_DIVISION_HOUSE_BUSINESS
+                )
+                {
+                    CRP_AdminShowHouseBusiness(playerid);
+                }
+
+                return 1;
+            }
+
+            case DIALOG_ADMIN_MY_BANS_CHARACTER:
+            case DIALOG_ADMIN_MY_BANS_UCP:
+            {
+                CRP_AdminShowMyBans(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_MY_BANS_ACTION:
+            {
+                if(
+                    gSelectedMyBanType[playerid] ==
+                    ADMIN_MY_BANS_UCP
+                )
+                {
+                    CRP_AdminShowMyUCPBans(playerid);
+                }
+                else
+                {
+                    CRP_AdminShowMyCharacterBans(playerid);
+                }
+
+                return 1;
+            }
+
+            case DIALOG_ADMIN_MY_BANS_CONFIRM:
+            {
+                if(
+                    gSelectedMyBanType[playerid] ==
+                    ADMIN_MY_BANS_UCP
+                )
+                {
+                    CRP_AdminShowMyUCPBans(playerid);
+                }
+                else
+                {
+                    CRP_AdminShowMyCharacterBans(playerid);
+                }
+
+                return 1;
+            }
         }
 
         return 0;
@@ -2047,72 +2814,274 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_MAIN)
     {
+        new index = 0;
+
+        // ----------------------------------------------------
+        // Admin List
+        // ----------------------------------------------------
+
+        if(listitem == index)
+        {
+            CRP_AdminShowList(playerid);
+            return 1;
+        }
+
+        index++;
+
+
+        // ----------------------------------------------------
+        // Admin Duty - R2+
+        // ----------------------------------------------------
+
+        if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+        {
+            if(listitem == index)
+            {
+                CRP_AdminShowDuty(playerid);
+                return 1;
+            }
+
+            index++;
+        }
+
+
+        // ----------------------------------------------------
+        // Admins
+        // ----------------------------------------------------
+
+        if(listitem == index)
+        {
+            CRP_AdminShowAdmins(playerid);
+            return 1;
+        }
+
+        index++;
+
+
+        // ----------------------------------------------------
+        // My Bans - R2+
+        // ----------------------------------------------------
+
+        if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+        {
+            if(listitem == index)
+            {
+                CRP_AdminShowMyBans(playerid);
+                return 1;
+            }
+
+            index++;
+        }
+
+
+        // ----------------------------------------------------
+        // Logs
+        // ----------------------------------------------------
+
+        if(listitem == index)
+        {
+            CRP_AdminShowLogs(playerid);
+            return 1;
+        }
+
+        index++;
+
+
+        // ----------------------------------------------------
+        // Reports
+        // ----------------------------------------------------
+
+        if(listitem == index)
+        {
+            CRP_AdminShowReportLogs(playerid);
+            return 1;
+        }
+
+        index++;
+
+
+        // ----------------------------------------------------
+        // Admin Settings
+        // ----------------------------------------------------
+
+        if(CRP_AdminCanAccessAdminSettings(playerid))
+        {
+            if(listitem == index)
+            {
+                CRP_AdminShowAdminSettings(playerid);
+                return 1;
+            }
+
+            index++;
+        }
+
+
+        // ----------------------------------------------------
+        // Money Settings
+        // ----------------------------------------------------
+
+        if(CRP_AdminCanAccessMoneySettings(playerid))
+        {
+            if(listitem == index)
+            {
+                CRP_AdminShowMoneySettings(playerid);
+                return 1;
+            }
+
+            index++;
+        }
+
+
+        // ----------------------------------------------------
+        // Admin Division
+        // ----------------------------------------------------
+
+        if(CRP_AdminCanAccessAdminDivision(playerid))
+        {
+            if(listitem == index)
+            {
+                CRP_AdminShowAdminDivision(playerid);
+                return 1;
+            }
+        }
+
+        return 1;
+    }
+
+
+    // ========================================================
+    // MY BANS MAIN
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_MY_BANS)
+    {
+        if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+        {
+            return 1;
+        }
+
         switch(listitem)
         {
             case 0:
             {
-                CRP_AdminShowList(playerid);
+                gSelectedMyBanType[playerid] =
+                    ADMIN_MY_BANS_CHARACTER;
+
+                CRP_AdminShowMyCharacterBans(playerid);
             }
 
             case 1:
             {
-                CRP_AdminShowDuty(playerid);
-            }
+                gSelectedMyBanType[playerid] =
+                    ADMIN_MY_BANS_UCP;
 
-            case 2:
-            {
-                CRP_AdminShowAdmins(playerid);
+                CRP_AdminShowMyUCPBans(playerid);
             }
+        }
 
-            case 3:
-            {
-                CRP_AdminShowLogs(playerid);
-            }
+        return 1;
+    }
 
-            case 4:
+
+    // ========================================================
+    // MY BANS ACTION
+    // ========================================================
+    //
+    // This dialog is available for future/local rendering
+    // when crp_admin_logs.pwn returns selected record details.
+    //
+    // UCP:
+    // 0 = Unblock
+    // 1 = Unban
+    // 2 = Batal
+    //
+    // Character:
+    // 0 = Unban
+    // 1 = Batal
+    //
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_MY_BANS_ACTION)
+    {
+        if(
+            gSelectedMyBanType[playerid] ==
+            ADMIN_MY_BANS_CHARACTER
+        )
+        {
+            if(listitem == 0)
             {
-                // Reports.
-                CallRemoteFunction(
-                    "CRP_AdminCommandsOpenReports",
-                    "i",
-                    playerid
+                CRP_AdminMyBanAction(
+                    playerid,
+                    ADMIN_MY_BANS_CHARACTER,
+                    ADMIN_BAN_ACTION_UNBAN
                 );
+
+                return 1;
             }
 
-            case 5:
+            return 1;
+        }
+
+        if(
+            gSelectedMyBanType[playerid] ==
+            ADMIN_MY_BANS_UCP
+        )
+        {
+            switch(listitem)
             {
-                if(CRP_AdminCanAccessAdminSettings(playerid))
+                case 0:
                 {
-                    CRP_AdminShowAdminSettings(playerid);
+                    CRP_AdminMyBanAction(
+                        playerid,
+                        ADMIN_MY_BANS_UCP,
+                        ADMIN_BAN_ACTION_UNBLOCK
+                    );
                 }
-                else if(CRP_AdminCanAccessMoneySettings(playerid))
+
+                case 1:
                 {
-                    CRP_AdminShowMoneySettings(playerid);
+                    CRP_AdminMyBanAction(
+                        playerid,
+                        ADMIN_MY_BANS_UCP,
+                        ADMIN_BAN_ACTION_UNBAN
+                    );
                 }
-                else if(CRP_AdminCanAccessAdminDivision(playerid))
+
+                case 2:
                 {
-                    CRP_AdminShowAdminDivision(playerid);
+                    CRP_AdminShowMyUCPBans(playerid);
                 }
             }
 
-            case 6:
-            {
-                if(CRP_AdminCanAccessMoneySettings(playerid))
-                {
-                    CRP_AdminShowMoneySettings(playerid);
-                }
-                else if(CRP_AdminCanAccessAdminDivision(playerid))
-                {
-                    CRP_AdminShowAdminDivision(playerid);
-                }
-            }
+            return 1;
+        }
 
-            case 7:
+        return 1;
+    }
+
+
+    // ========================================================
+    // MY BANS CONFIRM
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_MY_BANS_CONFIRM)
+    {
+        if(response)
+        {
+            CRP_AdminConfirmMyBanAction(playerid);
+        }
+        else
+        {
+            if(
+                gSelectedMyBanType[playerid] ==
+                ADMIN_MY_BANS_UCP
+            )
             {
-                if(CRP_AdminCanAccessAdminDivision(playerid))
-                {
-                    CRP_AdminShowAdminDivision(playerid);
-                }
+                CRP_AdminShowMyUCPBans(playerid);
+            }
+            else
+            {
+                CRP_AdminShowMyCharacterBans(playerid);
             }
         }
 
@@ -2240,7 +3209,6 @@ public OnDialogResponse(
         {
             case 0:
             {
-                // Admin
                 CallRemoteFunction(
                     "CRP_AdminCommandsOpenAdminPromotion",
                     "i",
@@ -2250,7 +3218,6 @@ public OnDialogResponse(
 
             case 1:
             {
-                // Helper Staff
                 CallRemoteFunction(
                     "CRP_AdminCommandsOpenHelperPromotion",
                     "i",
@@ -2260,7 +3227,6 @@ public OnDialogResponse(
 
             case 2:
             {
-                // Intern Staff
                 CallRemoteFunction(
                     "CRP_AdminCommandsOpenInternSettings",
                     "i",
@@ -2333,7 +3299,7 @@ public OnDialogResponse(
         {
             case 0:
             {
-                CRP_AdminShowFaction(playerid);
+                CRP_AdminShowFactionDivision(playerid);
             }
 
             case 1:
@@ -2347,13 +3313,12 @@ public OnDialogResponse(
 
 
     // ========================================================
-    // FACTIONS AND FAMILIES
+    // FACTIONS AND FAMILIES DIVISION
     // ========================================================
 
-    if(dialogid == DIALOG_ADMIN_FACTION)
+    if(dialogid == DIALOG_ADMIN_FACTION_DIV)
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid) &&
-           !CRP_AdminIsFactionFamilyHandler(playerid))
+        if(!CRP_AdminCanAccessAdminDivision(playerid))
         {
             return 1;
         }
@@ -2362,13 +3327,11 @@ public OnDialogResponse(
         {
             case 0:
             {
-                // Factions
                 CRP_AdminShowFactionList(playerid);
             }
 
             case 1:
             {
-                // Choose Handler
                 CallRemoteFunction(
                     "CRP_AdminCommandsOpenFactionHandler",
                     "i",
@@ -2378,13 +3341,45 @@ public OnDialogResponse(
 
             case 2:
             {
-                // Handler List
                 CRP_AdminShowHandlerList(
                     playerid,
                     ADMIN_DIVISION_FACTION_FAMILY
                 );
             }
         }
+
+        return 1;
+    }
+
+
+    // ========================================================
+    // FACTION LIST
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_FACTION_LIST)
+    {
+        if(
+            !CRP_AdminCanAccessAdminDivision(playerid) &&
+            !CRP_AdminIsFactionFamilyHandler(playerid)
+        )
+        {
+            return 1;
+        }
+
+        if(listitem < 0 || listitem > 3)
+        {
+            return 1;
+        }
+
+        gSelectedFaction[playerid] =
+            listitem + 1;
+
+        CallRemoteFunction(
+            "CRP_AdminCommandsOpenFactionAction",
+            "ii",
+            playerid,
+            gSelectedFaction[playerid]
+        );
 
         return 1;
     }
@@ -2404,10 +3399,10 @@ public OnDialogResponse(
             return 1;
         }
 
-        // Family slot selection.
         if(listitem >= 0 && listitem <= 9)
         {
-            gSelectedFamily[playerid] = listitem + 1;
+            gSelectedFamily[playerid] =
+                listitem + 1;
 
             CallRemoteFunction(
                 "CRP_AdminCommandsOpenFamilyAction",
@@ -2455,8 +3450,6 @@ public OnDialogResponse(
 
             case 2:
             {
-                // Reserved for future House/Business submenu.
-                // No implementation added yet.
                 SendClientMessage(
                     playerid,
                     COLOR_GREY,
@@ -2472,6 +3465,15 @@ public OnDialogResponse(
     // ========================================================
     // HANDLER LIST
     // ========================================================
+    //
+    // IMPORTANT:
+    // listitem is a row index.
+    // It is NOT a Player ID.
+    //
+    // crp_admin_cmd.pwn must resolve the selected account
+    // from the corresponding handler-account array.
+    //
+    // ========================================================
 
     if(dialogid == DIALOG_ADMIN_HANDLER_LIST)
     {
@@ -2480,13 +3482,13 @@ public OnDialogResponse(
             return 1;
         }
 
-        // Selection will be resolved by crp_admin_cmd.pwn.
         gSelectedHandlerTarget[playerid] = listitem;
 
         CallRemoteFunction(
             "CRP_AdminCommandsHandleHandlerSelection",
-            "ii",
+            "iii",
             playerid,
+            gSelectedHandlerDivision[playerid],
             listitem
         );
 
@@ -2504,27 +3506,56 @@ public OnDialogResponse(
 
 public OnPlayerConnect(playerid)
 {
-    gPlayerAdminRank[playerid] = ADMIN_NO_STAFF;
+    gPlayerAdminRank[playerid] =
+        ADMIN_NO_STAFF;
 
-    gPlayerAdminDuty[playerid] = false;
-    gPlayerAdminDutyStart[playerid] = 0;
-    gPlayerAdminDutyTotal[playerid] = 0;
+    gPlayerAdminDuty[playerid] =
+        false;
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_NONE;
+    gPlayerAdminDutyStart[playerid] =
+        0;
 
-    gFactionFamilyHandler[playerid] = 0;
-    gHouseBusinessHandler[playerid] = 0;
+    gPlayerAdminDutyTotal[playerid] =
+        0;
 
-    gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
-    gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_NONE;
 
-    gSelectedAdminTarget[playerid] = INVALID_PLAYER_ID;
-    gSelectedHandlerTarget[playerid] = INVALID_PLAYER_ID;
+    gPlayerActiveFaction[playerid] =
+        ADMIN_FACTION_NONE;
 
-    gSelectedFaction[playerid] = ADMIN_FACTION_NONE;
-    gSelectedFamily[playerid] = ADMIN_FAMILY_NONE;
+    gPlayerActiveFamily[playerid] =
+        ADMIN_FAMILY_NONE;
+
+    gSelectedAdminTarget[playerid] =
+        INVALID_PLAYER_ID;
+
+    gSelectedHandlerTarget[playerid] =
+        INVALID_PLAYER_ID;
+
+    gSelectedHandlerDivision[playerid] =
+        ADMIN_DIVISION_NONE;
+
+    gSelectedFaction[playerid] =
+        ADMIN_FACTION_NONE;
+
+    gSelectedFamily[playerid] =
+        ADMIN_FAMILY_NONE;
+
+    gSelectedMyBanType[playerid] =
+        ADMIN_MY_BANS_CHARACTER;
+
+    gSelectedMyBanAction[playerid] =
+        ADMIN_BAN_ACTION_NONE;
 
     CRP_AdminLoadAccountIdentity(playerid);
+
+    // IMPORTANT:
+    // Handler assignment is account based.
+    // Do NOT clear handler assignment here.
+    //
+    // Runtime active faction/family is session based and is
+    // reset above.
 
     return 1;
 }
@@ -2536,25 +3567,61 @@ public OnPlayerConnect(playerid)
 
 public OnPlayerDisconnect(playerid, reason)
 {
-    gPlayerAdminRank[playerid] = ADMIN_NO_STAFF;
+    // Save/update duty runtime before clearing.
+    if(gPlayerAdminDuty[playerid])
+    {
+        gPlayerAdminDutyTotal[playerid] +=
+            gettime() - gPlayerAdminDutyStart[playerid];
+    }
 
-    gPlayerAdminDuty[playerid] = false;
-    gPlayerAdminDutyStart[playerid] = 0;
-    gPlayerAdminDutyTotal[playerid] = 0;
+    gPlayerAdminRank[playerid] =
+        ADMIN_NO_STAFF;
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_NONE;
+    gPlayerAdminDuty[playerid] =
+        false;
 
-    gFactionFamilyHandler[playerid] = 0;
-    gHouseBusinessHandler[playerid] = 0;
+    gPlayerAdminDutyStart[playerid] =
+        0;
 
-    gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
-    gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
+    gPlayerAdminDutyTotal[playerid] =
+        0;
 
-    gSelectedAdminTarget[playerid] = INVALID_PLAYER_ID;
-    gSelectedHandlerTarget[playerid] = INVALID_PLAYER_ID;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_NONE;
 
-    gSelectedFaction[playerid] = ADMIN_FACTION_NONE;
-    gSelectedFamily[playerid] = ADMIN_FAMILY_NONE;
+    gPlayerActiveFaction[playerid] =
+        ADMIN_FACTION_NONE;
+
+    gPlayerActiveFamily[playerid] =
+        ADMIN_FAMILY_NONE;
+
+    gSelectedAdminTarget[playerid] =
+        INVALID_PLAYER_ID;
+
+    gSelectedHandlerTarget[playerid] =
+        INVALID_PLAYER_ID;
+
+    gSelectedHandlerDivision[playerid] =
+        ADMIN_DIVISION_NONE;
+
+    gSelectedFaction[playerid] =
+        ADMIN_FACTION_NONE;
+
+    gSelectedFamily[playerid] =
+        ADMIN_FAMILY_NONE;
+
+    gSelectedMyBanType[playerid] =
+        ADMIN_MY_BANS_CHARACTER;
+
+    gSelectedMyBanAction[playerid] =
+        ADMIN_BAN_ACTION_NONE;
+
+    // IMPORTANT:
+    //
+    // Handler assignment is NOT cleared.
+    //
+    // It belongs to the account username and must remain
+    // assigned after the player disconnects.
 
     return 1;
 }
@@ -2567,12 +3634,16 @@ public OnPlayerDisconnect(playerid, reason)
 public OnFilterScriptInit()
 {
     print("--------------------------------------------------");
-    print("Crystal Roleplay Admin Panel v3.0");
+    print("Crystal Roleplay Admin Panel v3.1");
     print("Admin Panel System loaded.");
     print("Command system : crp_admin_cmd.pwn");
     print("Log system     : crp_admin_logs.pwn");
     print("Archives       : REMOVED");
+    print("My Bans        : ENABLED");
+    print("UCP Unban      : ENABLED");
+    print("UCP Unblock    : ENABLED");
     print("Admin Division : ENABLED");
+    print("Handler Model  : ACCOUNT BASED");
     print("--------------------------------------------------");
 
     return 1;
@@ -2602,24 +3673,6 @@ public CRP_AdminOpenPanel(playerid)
 
     return CRP_AdminShowMainPanel(playerid);
 }
-
-
-// ============================================================
-// OPTIONAL DIRECT PUBLIC HELPERS
-// ============================================================
-//
-// These are intentionally public so other filterscripts can
-// access the Admin Panel system using CallRemoteFunction.
-//
-// Example:
-//
-// CallRemoteFunction(
-//     "CRP_AdminOpenPanel",
-//     "i",
-//     playerid
-// );
-//
-// ============================================================
 
 
 // ============================================================
