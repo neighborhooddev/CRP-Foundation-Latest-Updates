@@ -68,6 +68,18 @@
 
 
 // ============================================================
+// INTERNAL CONFIGURATION
+// ============================================================
+
+#define ADMIN_USERNAME_LENGTH       25
+#define ADMIN_RANKNAME_LENGTH       32
+#define ADMIN_DIALOG_SIZE           4096
+#define ADMIN_HANDLER_MAX            10
+
+#define ASK_MATCH_MAX_RESULTS        20
+
+
+// ============================================================
 // COLORS
 // ============================================================
 
@@ -219,9 +231,9 @@
 // ============================================================
 
 #define ASK_STATUS_NONE             0
-#define ASK_STATUS_ACTIVE            1
-#define ASK_STATUS_ANSWERED          2
-#define ASK_STATUS_EXPIRED           3
+#define ASK_STATUS_ACTIVE           1
+#define ASK_STATUS_ANSWERED         2
+#define ASK_STATUS_EXPIRED          3
 
 #define ASK_MAX_QUEUE               100
 #define ASK_MAX_LOG                 500
@@ -238,7 +250,6 @@
 #define ASK_COUNTER_FILE            "scriptfiles/crp_ask/counter.txt"
 
 #define ASK_MATCH_MIN_WORDS         2
-#define ASK_MATCH_MAX_RESULTS       20
 
 #define ASK_SCORE_NONE              0
 #define ASK_SCORE_LOW               1
@@ -297,7 +308,6 @@
 new gAskQueueID[ASK_MAX_QUEUE];
 new gAskQueueStatus[ASK_MAX_QUEUE];
 new gAskQueueCreated[ASK_MAX_QUEUE];
-
 new gAskQueuePlayerID[ASK_MAX_QUEUE];
 
 new gAskQueueRequester[ASK_MAX_QUEUE][ASK_USERNAME_LENGTH];
@@ -340,14 +350,9 @@ new gSelectedAskLog[MAX_PLAYERS];
 // ============================================================
 // ASK MATCH CACHE
 // ============================================================
-//
-// These arrays are used by the future player /ask flow.
-// They are kept inside crp_admin.pwn so AskBot and ASK Logs
-// remain one unified source.
-//
-// ============================================================
 
 new gAskMatchLogIndex[MAX_PLAYERS][ASK_MATCH_MAX_RESULTS];
+new gAskMatchScore[MAX_PLAYERS][ASK_MATCH_MAX_RESULTS];
 new gAskMatchCount[MAX_PLAYERS];
 
 
@@ -427,6 +432,7 @@ forward CRP_AdminSetFamilyRemote(playerid, family);
 // ============================================================
 
 forward CRP_AskOpenAdminQueue(playerid);
+
 forward CRP_AskCreateQueue(
     playerid,
     const requester[],
@@ -815,13 +821,16 @@ stock CRP_AdminSetHandlerAccount(
     const account[]
 )
 {
+    if(
+        slot < 0 ||
+        slot >= ADMIN_HANDLER_MAX
+    )
+    {
+        return 0;
+    }
+
     if(division == ADMIN_DIVISION_FACTION_FAMILY)
     {
-        if(slot < 0 || slot >= ADMIN_HANDLER_MAX)
-        {
-            return 0;
-        }
-
         format(
             gFactionFamilyHandlerAccount[slot],
             ADMIN_USERNAME_LENGTH,
@@ -834,11 +843,6 @@ stock CRP_AdminSetHandlerAccount(
 
     if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
     {
-        if(slot < 0 || slot >= ADMIN_HANDLER_MAX)
-        {
-            return 0;
-        }
-
         format(
             gHouseBusinessHandlerAccount[slot],
             ADMIN_USERNAME_LENGTH,
@@ -994,7 +998,9 @@ stock CRP_AdminGetDutySeconds(playerid)
 
     if(gPlayerAdminDuty[playerid])
     {
-        total += gettime() - gPlayerAdminDutyStart[playerid];
+        total +=
+            gettime() -
+            gPlayerAdminDutyStart[playerid];
     }
 
     return total;
@@ -1051,7 +1057,8 @@ stock CRP_AdminDutyOff(playerid)
     }
 
     gPlayerAdminDutyTotal[playerid] +=
-        gettime() - gPlayerAdminDutyStart[playerid];
+        gettime() -
+        gPlayerAdminDutyStart[playerid];
 
     gPlayerAdminDuty[playerid] = false;
     gPlayerAdminDutyStart[playerid] = 0;
@@ -1113,36 +1120,24 @@ stock CRP_AdminSendChat(playerid, const message[])
 
 
 // ============================================================
-// ============================================================
-// ASK STORAGE SYSTEM
-// ============================================================
-// ============================================================
-//
-// IMPORTANT:
-// ASK storage belongs to this file.
-//
-// No crp_admin_logs.pwn is required.
-//
-// Queue:
-// ACTIVE -> ANSWERED
-// ACTIVE -> EXPIRED
-//
-// AskBot:
-// Reads ANSWERED only.
-//
+// ASK STORAGE
 // ============================================================
 
-
-// ============================================================
-// ASK STRING SANITIZER
-// ============================================================
-
-stock CRP_AskSanitize(const input[], output[], size)
+stock CRP_AskSanitize(
+    const input[],
+    output[],
+    size
+)
 {
     new length = strlen(input);
     new position = 0;
 
-    for(new i = 0; i < length && position < size - 1; i++)
+    for(
+        new i = 0;
+        i < length &&
+        position < size - 1;
+        i++
+    )
     {
         if(input[i] == '|')
         {
@@ -1161,22 +1156,22 @@ stock CRP_AskSanitize(const input[], output[], size)
 
 
 // ============================================================
-// ASK FILE DIRECTORY
-// ============================================================
-//
-// SA-MP fopen cannot create nested directories.
-// The directory must exist before runtime.
-//
-// The system therefore gracefully falls back to the
-// root scriptfiles path if the directory is unavailable.
-//
+// ASK STORAGE INITIALIZATION
 // ============================================================
 
 stock CRP_AskEnsureStorage()
 {
     new File:file;
 
-    file = fopen(ASK_COUNTER_FILE, io_read);
+    /*
+     * The directory scriptfiles/crp_ask must exist on disk.
+     * SA-MP's standard fopen does not create directories.
+     */
+
+    file = fopen(
+        ASK_COUNTER_FILE,
+        io_read
+    );
 
     if(file)
     {
@@ -1184,7 +1179,10 @@ stock CRP_AskEnsureStorage()
         return 1;
     }
 
-    file = fopen(ASK_COUNTER_FILE, io_write);
+    file = fopen(
+        ASK_COUNTER_FILE,
+        io_write
+    );
 
     if(file)
     {
@@ -1217,7 +1215,8 @@ stock CRP_AskLoadCounter()
 
     if(fread(file, line))
     {
-        gAskNextQueueID = strval(line) + 1;
+        gAskNextQueueID =
+            strval(line) + 1;
     }
     else
     {
@@ -1270,18 +1269,13 @@ stock CRP_AskSaveCounter()
 // ============================================================
 // ASK LOG SAVE
 // ============================================================
-//
-// Format:
-//
-// ID|STATUS|CREATED|ANSWERED|REQUESTER|ACCOUNT|QUESTION|ANSWER|RANK|ADMIN
-//
-// ============================================================
 
-stock CRP_AskSaveLog(
-    index
-)
+stock CRP_AskSaveLog(index)
 {
-    if(index < 0 || index >= ASK_MAX_LOG)
+    if(
+        index < 0 ||
+        index >= ASK_MAX_LOG
+    )
     {
         return 0;
     }
@@ -1355,7 +1349,10 @@ stock CRP_AskLoadLogs()
 
         for(new i = 0; i <= length; i++)
         {
-            if(line[i] == '|' || line[i] == EOS)
+            if(
+                line[i] == '|' ||
+                line[i] == EOS
+            )
             {
                 if(field < 10)
                 {
@@ -1389,10 +1386,17 @@ stock CRP_AskLoadLogs()
 
         new index = gAskLogCount;
 
-        gAskLogID[index] = strval(fields[0]);
-        gAskLogStatus[index] = strval(fields[1]);
-        gAskLogCreated[index] = strval(fields[2]);
-        gAskLogAnswered[index] = strval(fields[3]);
+        gAskLogID[index] =
+            strval(fields[0]);
+
+        gAskLogStatus[index] =
+            strval(fields[1]);
+
+        gAskLogCreated[index] =
+            strval(fields[2]);
+
+        gAskLogAnswered[index] =
+            strval(fields[3]);
 
         format(
             gAskLogRequester[index],
@@ -1457,7 +1461,10 @@ stock CRP_AskAddLog(
     const admin_username[]
 )
 {
-    if(queue_index < 0 || queue_index >= ASK_MAX_QUEUE)
+    if(
+        queue_index < 0 ||
+        queue_index >= ASK_MAX_QUEUE
+    )
     {
         return -1;
     }
@@ -1478,10 +1485,14 @@ stock CRP_AskAddLog(
     gAskLogCreated[index] =
         gAskQueueCreated[queue_index];
 
-    gAskLogAnswered[index] =
-        status == ASK_STATUS_ANSWERED
-        ? gettime()
-        : 0;
+    if(status == ASK_STATUS_ANSWERED)
+    {
+        gAskLogAnswered[index] = gettime();
+    }
+    else
+    {
+        gAskLogAnswered[index] = 0;
+    }
 
     format(
         gAskLogRequester[index],
@@ -1539,12 +1550,19 @@ stock CRP_AskAddLog(
 
 stock CRP_AskRemoveQueue(index)
 {
-    if(index < 0 || index >= gAskQueueCount)
+    if(
+        index < 0 ||
+        index >= gAskQueueCount
+    )
     {
         return 0;
     }
 
-    for(new i = index; i < gAskQueueCount - 1; i++)
+    for(
+        new i = index;
+        i < gAskQueueCount - 1;
+        i++
+    )
     {
         gAskQueueID[i] =
             gAskQueueID[i + 1];
@@ -1582,6 +1600,11 @@ stock CRP_AskRemoveQueue(index)
 
     gAskQueueCount--;
 
+    if(gAskQueueCount < 0)
+    {
+        gAskQueueCount = 0;
+    }
+
     return 1;
 }
 
@@ -1594,14 +1617,25 @@ public CRP_AskExpireQueues()
 {
     new now = gettime();
 
-    for(new i = gAskQueueCount - 1; i >= 0; i--)
+    for(
+        new i = gAskQueueCount - 1;
+        i >= 0;
+        i--
+    )
     {
-        if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+        if(
+            gAskQueueStatus[i] !=
+            ASK_STATUS_ACTIVE
+        )
         {
             continue;
         }
 
-        if(now - gAskQueueCreated[i] < ASK_QUEUE_TIMEOUT)
+        if(
+            now -
+            gAskQueueCreated[i] <
+            ASK_QUEUE_TIMEOUT
+        )
         {
             continue;
         }
@@ -1639,16 +1673,6 @@ public CRP_AskExpireQueues()
 // ============================================================
 // ASK CREATE QUEUE
 // ============================================================
-//
-// This function will later be called by
-// crp_basic_player_cmd.pwn after:
-// - Player typed /ask
-// - Preview shown
-// - Player confirmed
-// - AskBot found no useful answer
-// - Player confirmed fallback
-//
-// ============================================================
 
 public CRP_AskCreateQueue(
     playerid,
@@ -1657,12 +1681,17 @@ public CRP_AskCreateQueue(
     const question[]
 )
 {
-    if(gAskQueueCount >= ASK_MAX_QUEUE)
+    if(
+        gAskQueueCount >=
+        ASK_MAX_QUEUE
+    )
     {
         return 0;
     }
 
-    new sanitized_question[ASK_QUESTION_LENGTH];
+    new sanitized_question[
+        ASK_QUESTION_LENGTH
+    ];
 
     CRP_AskSanitize(
         question,
@@ -1675,7 +1704,8 @@ public CRP_AskCreateQueue(
         return 0;
     }
 
-    new index = gAskQueueCount;
+    new index =
+        gAskQueueCount;
 
     gAskQueueID[index] =
         gAskNextQueueID;
@@ -1716,7 +1746,6 @@ public CRP_AskCreateQueue(
 
     gAskQueueCount++;
 
-    // Notify all online staff.
     new notice[256];
 
     format(
@@ -1783,7 +1812,8 @@ public CRP_AskGetQueueIDForPlayer(playerid)
     {
         if(
             gAskQueuePlayerID[i] == playerid &&
-            gAskQueueStatus[i] == ASK_STATUS_ACTIVE
+            gAskQueueStatus[i] ==
+            ASK_STATUS_ACTIVE
         )
         {
             return gAskQueueID[i];
@@ -1797,11 +1827,6 @@ public CRP_AskGetQueueIDForPlayer(playerid)
 // ============================================================
 // ASK ANSWER QUEUE
 // ============================================================
-//
-// The admin command layer will validate hierarchy / access
-// before calling this function.
-//
-// ============================================================
 
 public CRP_AskAnswerQueue(
     playerid,
@@ -1814,19 +1839,25 @@ public CRP_AskAnswerQueue(
         return 0;
     }
 
-    new index = CRP_AskFindQueue(queueid);
+    new index =
+        CRP_AskFindQueue(queueid);
 
     if(index == -1)
     {
         return 0;
     }
 
-    if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+    if(
+        gAskQueueStatus[index] !=
+        ASK_STATUS_ACTIVE
+    )
     {
         return 0;
     }
 
-    new sanitized_answer[ASK_ANSWER_LENGTH];
+    new sanitized_answer[
+        ASK_ANSWER_LENGTH
+    ];
 
     CRP_AskSanitize(
         answer,
@@ -1839,7 +1870,9 @@ public CRP_AskAnswerQueue(
         return 0;
     }
 
-    new rankname[ADMIN_RANKNAME_LENGTH];
+    new rankname[
+        ADMIN_RANKNAME_LENGTH
+    ];
 
     CRP_GetAdminRankName(
         gPlayerAdminRank[playerid],
@@ -1902,7 +1935,6 @@ public CRP_AskAnswerQueue(
         );
     }
 
-    // AdminCmd prefix is intentionally used for the action log.
     new logmessage[256];
 
     format(
@@ -1964,7 +1996,10 @@ public CRP_AskOpenAdminQueue(playerid)
 
     for(new i = 0; i < gAskQueueCount; i++)
     {
-        if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+        if(
+            gAskQueueStatus[i] !=
+            ASK_STATUS_ACTIVE
+        )
         {
             continue;
         }
@@ -2024,12 +2059,18 @@ stock CRP_AskShowQueueDetail(
     queue_index
 )
 {
-    if(queue_index < 0 || queue_index >= gAskQueueCount)
+    if(
+        queue_index < 0 ||
+        queue_index >= gAskQueueCount
+    )
     {
         return 0;
     }
 
-    if(gAskQueueStatus[queue_index] != ASK_STATUS_ACTIVE)
+    if(
+        gAskQueueStatus[queue_index] !=
+        ASK_STATUS_ACTIVE
+    )
     {
         return 0;
     }
@@ -2042,7 +2083,7 @@ stock CRP_AskShowQueueDetail(
     format(
         message,
         sizeof(message),
-        "QUEUE #%03d - %s\n\n%s\n\nJawab\tBatal",
+        "QUEUE #%03d - %s\n\n%s\n\nJawab",
         gAskQueueID[queue_index],
         gAskQueueRequester[queue_index],
         gAskQueueQuestion[queue_index]
@@ -2074,12 +2115,18 @@ stock CRP_AskShowAnswerDialog(playerid)
     new index =
         gSelectedAskQueue[playerid];
 
-    if(index < 0 || index >= gAskQueueCount)
+    if(
+        index < 0 ||
+        index >= gAskQueueCount
+    )
     {
         return 0;
     }
 
-    if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+    if(
+        gAskQueueStatus[index] !=
+        ASK_STATUS_ACTIVE
+    )
     {
         return 0;
     }
@@ -2108,7 +2155,7 @@ stock CRP_AskShowAnswerDialog(playerid)
 
 
 // ============================================================
-// ASK BOT WORD NORMALIZATION
+// ASK BOT FILLER WORD
 // ============================================================
 
 stock CRP_AskIsFillerWord(const word[])
@@ -2127,8 +2174,6 @@ stock CRP_AskIsFillerWord(const word[])
     if(!strcmp(word, "nih", true)) return 1;
     if(!strcmp(word, "ini", true)) return 1;
     if(!strcmp(word, "itu", true)) return 1;
-    if(!strcmp(word, "gimana", true)) return 0;
-    if(!strcmp(word, "gimana?", true)) return 0;
 
     return 0;
 }
@@ -2146,7 +2191,12 @@ stock CRP_AskCleanWord(
 {
     new position = 0;
 
-    for(new i = 0; input[i] != EOS && position < size - 1; i++)
+    for(
+        new i = 0;
+        input[i] != EOS &&
+        position < size - 1;
+        i++
+    )
     {
         if(
             input[i] == '?' ||
@@ -2173,7 +2223,7 @@ stock CRP_AskCleanWord(
 
 
 // ============================================================
-// ASK BOT WORD MATCH
+// ASK BOT QUESTION SCORE
 // ============================================================
 
 stock CRP_AskQuestionScore(
@@ -2187,29 +2237,20 @@ stock CRP_AskQuestionScore(
     new count_a = 0;
     new count_b = 0;
 
-    new buffer_a[ASK_QUESTION_LENGTH];
-    new buffer_b[ASK_QUESTION_LENGTH];
-
-    format(
-        buffer_a,
-        sizeof(buffer_a),
-        "%s",
-        question_a
-    );
-
-    format(
-        buffer_b,
-        sizeof(buffer_b),
-        "%s",
-        question_b
-    );
-
     new start = 0;
-    new length = strlen(buffer_a);
+    new length = strlen(question_a);
 
-    for(new i = 0; i <= length && count_a < 24; i++)
+    for(
+        new i = 0;
+        i <= length &&
+        count_a < 24;
+        i++
+    )
     {
-        if(buffer_a[i] == ' ' || buffer_a[i] == EOS)
+        if(
+            question_a[i] == ' ' ||
+            question_a[i] == EOS
+        )
         {
             if(i > start)
             {
@@ -2217,23 +2258,32 @@ stock CRP_AskQuestionScore(
 
                 strmid(
                     raw,
-                    buffer_a,
+                    question_a,
                     start,
                     i,
                     sizeof(raw)
                 );
 
+                new cleaned[32];
+
                 CRP_AskCleanWord(
                     raw,
-                    words_a[count_a],
-                    sizeof(words_a[])
+                    cleaned,
+                    sizeof(cleaned)
                 );
 
                 if(
-                    words_a[count_a][0] != EOS &&
-                    !CRP_AskIsFillerWord(words_a[count_a])
+                    cleaned[0] != EOS &&
+                    !CRP_AskIsFillerWord(cleaned)
                 )
                 {
+                    format(
+                        words_a[count_a],
+                        sizeof(words_a[]),
+                        "%s",
+                        cleaned
+                    );
+
                     count_a++;
                 }
             }
@@ -2243,11 +2293,19 @@ stock CRP_AskQuestionScore(
     }
 
     start = 0;
-    length = strlen(buffer_b);
+    length = strlen(question_b);
 
-    for(new i = 0; i <= length && count_b < 24; i++)
+    for(
+        new i = 0;
+        i <= length &&
+        count_b < 24;
+        i++
+    )
     {
-        if(buffer_b[i] == ' ' || buffer_b[i] == EOS)
+        if(
+            question_b[i] == ' ' ||
+            question_b[i] == EOS
+        )
         {
             if(i > start)
             {
@@ -2255,23 +2313,32 @@ stock CRP_AskQuestionScore(
 
                 strmid(
                     raw,
-                    buffer_b,
+                    question_b,
                     start,
                     i,
                     sizeof(raw)
                 );
 
+                new cleaned[32];
+
                 CRP_AskCleanWord(
                     raw,
-                    words_b[count_b],
-                    sizeof(words_b[])
+                    cleaned,
+                    sizeof(cleaned)
                 );
 
                 if(
-                    words_b[count_b][0] != EOS &&
-                    !CRP_AskIsFillerWord(words_b[count_b])
+                    cleaned[0] != EOS &&
+                    !CRP_AskIsFillerWord(cleaned)
                 )
                 {
+                    format(
+                        words_b[count_b],
+                        sizeof(words_b[]),
+                        "%s",
+                        cleaned
+                    );
+
                     count_b++;
                 }
             }
@@ -2280,7 +2347,10 @@ stock CRP_AskQuestionScore(
         }
     }
 
-    if(count_a == 0 || count_b == 0)
+    if(
+        count_a == 0 ||
+        count_b == 0
+    )
     {
         return ASK_SCORE_NONE;
     }
@@ -2323,13 +2393,100 @@ stock CRP_AskQuestionScore(
 
 
 // ============================================================
+// ASK BOT INSERT MATCH
+// ============================================================
+
+stock CRP_AskInsertMatch(
+    playerid,
+    log_index,
+    score
+)
+{
+    if(
+        !CRP_AdminIsValidPlayer(playerid)
+    )
+    {
+        return 0;
+    }
+
+    if(score <= ASK_SCORE_NONE)
+    {
+        return 0;
+    }
+
+    new count =
+        gAskMatchCount[playerid];
+
+    if(count >= ASK_MATCH_MAX_RESULTS)
+    {
+        if(
+            score <=
+            gAskMatchScore[playerid][count - 1]
+        )
+        {
+            return 0;
+        }
+
+        count =
+            ASK_MATCH_MAX_RESULTS - 1;
+    }
+
+    new position = count;
+
+    for(new i = 0; i < count; i++)
+    {
+        if(
+            score >
+            gAskMatchScore[playerid][i]
+        )
+        {
+            position = i;
+            break;
+        }
+    }
+
+    if(position < ASK_MATCH_MAX_RESULTS)
+    {
+        for(
+            new i = ASK_MATCH_MAX_RESULTS - 1;
+            i > position;
+            i--
+        )
+        {
+            gAskMatchScore[playerid][i] =
+                gAskMatchScore[playerid][i - 1];
+
+            gAskMatchLogIndex[playerid][i] =
+                gAskMatchLogIndex[playerid][i - 1];
+        }
+
+        gAskMatchScore[playerid][position] =
+            score;
+
+        gAskMatchLogIndex[playerid][position] =
+            log_index;
+    }
+
+    if(
+        gAskMatchCount[playerid] <
+        ASK_MATCH_MAX_RESULTS
+    )
+    {
+        gAskMatchCount[playerid]++;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
 // ASK BOT SIMILAR QUESTION SEARCH
 // ============================================================
 //
-// IMPORTANT:
-// Only ANSWERED logs are searched.
+// ONLY ANSWERED logs are searched.
 //
-// ACTIVE and EXPIRED are never used as AskBot answers.
+// ACTIVE = ignored
+// EXPIRED = ignored
 //
 // ============================================================
 
@@ -2345,18 +2502,17 @@ public CRP_AskGetSimilarQuestions(
 
     gAskMatchCount[playerid] = 0;
 
-    new scores[ASK_MATCH_MAX_RESULTS];
-
     for(new i = 0; i < ASK_MATCH_MAX_RESULTS; i++)
     {
         gAskMatchLogIndex[playerid][i] = -1;
-        scores[i] = 0;
+        gAskMatchScore[playerid][i] = 0;
     }
 
     for(new i = 0; i < gAskLogCount; i++)
     {
         if(
-            gAskLogStatus[i] != ASK_STATUS_ANSWERED
+            gAskLogStatus[i] !=
+            ASK_STATUS_ANSWERED
         )
         {
             continue;
@@ -2373,60 +2529,11 @@ public CRP_AskGetSimilarQuestions(
             continue;
         }
 
-        new insert = gAskMatchCount[playerid];
-
-        if(insert >= ASK_MATCH_MAX_RESULTS)
-        {
-            insert = ASK_MATCH_MAX_RESULTS - 1;
-        }
-
-        for(new j = 0; j < insert; j++)
-        {
-            if(score > scores[j])
-            {
-                for(new k = insert; k > j; k--)
-                {
-                    scores[k] = scores[k - 1];
-                    gAskMatchLogIndex[playerid][k] =
-                        gAskMatchLogIndex[playerid][k - 1];
-                }
-
-                scores[j] = score;
-                gAskMatchLogIndex[playerid][j] = i;
-
-                if(gAskMatchCount[playerid] < ASK_MATCH_MAX_RESULTS)
-                {
-                    gAskMatchCount[playerid]++;
-                }
-
-                insert = -1;
-                break;
-            }
-        }
-
-        if(insert == 0)
-        {
-            scores[0] = score;
-            gAskMatchLogIndex[playerid][0] = i;
-
-            if(gAskMatchCount[playerid] == 0)
-            {
-                gAskMatchCount[playerid] = 1;
-            }
-
-            continue;
-        }
-
-        if(insert >= 0 && insert < ASK_MATCH_MAX_RESULTS)
-        {
-            if(gAskMatchCount[playerid] < ASK_MATCH_MAX_RESULTS)
-            {
-                gAskMatchIndex:
-                gAskMatchLogIndex[playerid][gAskMatchCount[playerid]] = i;
-                scores[gAskMatchCount[playerid]] = score;
-                gAskMatchCount[playerid]++;
-            }
-        }
+        CRP_AskInsertMatch(
+            playerid,
+            i,
+            score
+        );
     }
 
     return gAskMatchCount[playerid];
@@ -2464,13 +2571,16 @@ public CRP_AskGetMatchLog(
 
     if(
         match_index < 0 ||
-        match_index >= gAskMatchCount[playerid]
+        match_index >=
+        gAskMatchCount[playerid]
     )
     {
         return -1;
     }
 
-    return gAskMatchLogIndex[playerid][match_index];
+    return gAskMatchLogIndex[
+        playerid
+    ][match_index];
 }
 
 
@@ -2583,7 +2693,10 @@ public CRP_AskGetLogAdmin(
         return 0;
     }
 
-    if(gAskLogStatus[log_index] != ASK_STATUS_ANSWERED)
+    if(
+        gAskLogStatus[log_index] !=
+        ASK_STATUS_ANSWERED
+    )
     {
         output[0] = EOS;
         return 0;
@@ -2603,14 +2716,6 @@ public CRP_AskGetLogAdmin(
 
 // ============================================================
 // ASK FALLBACK CONFIRMATION BRIDGE
-// ============================================================
-//
-// Future /ask system calls this only after AskBot has failed
-// to provide a useful answer and the player has confirmed:
-//
-// "Apakah anda yakin Bot Ask List tidak menjawab pertanyaan
-// kamu?"
-//
 // ============================================================
 
 public CRP_AskConfirmFallback(
@@ -2650,17 +2755,35 @@ stock CRP_AskShowLogs(playerid)
 
     new count = 0;
 
-    for(new i = gAskLogCount - 1; i >= 0; i--)
+    for(
+        new i = gAskLogCount - 1;
+        i >= 0;
+        i--
+    )
     {
         new status[16];
 
-        if(gAskLogStatus[i] == ASK_STATUS_ANSWERED)
+        if(
+            gAskLogStatus[i] ==
+            ASK_STATUS_ANSWERED
+        )
         {
-            format(status, sizeof(status), "ANSWERED");
+            format(
+                status,
+                sizeof(status),
+                "ANSWERED"
+            );
         }
-        else if(gAskLogStatus[i] == ASK_STATUS_EXPIRED)
+        else if(
+            gAskLogStatus[i] ==
+            ASK_STATUS_EXPIRED
+        )
         {
-            format(status, sizeof(status), "EXPIRED");
+            format(
+                status,
+                sizeof(status),
+                "EXPIRED"
+            );
         }
         else
         {
@@ -2736,7 +2859,10 @@ stock CRP_AskShowLogDetail(
 
     new status[16];
 
-    if(gAskLogStatus[log_index] == ASK_STATUS_ANSWERED)
+    if(
+        gAskLogStatus[log_index] ==
+        ASK_STATUS_ANSWERED
+    )
     {
         format(
             status,
@@ -2759,11 +2885,11 @@ stock CRP_AskShowLogDetail(
         message,
         sizeof(message),
         "QUEUE #%03d\n\
-        STATUS: %s\n\
-        QUESTIONED: %s\n\n\
-        QUESTION:\n%s\n\n\
-        ANSWER:\n%s\n\n\
-        ADMIN:\n%s %s",
+STATUS: %s\n\
+QUESTIONED: %s\n\n\
+QUESTION:\n%s\n\n\
+ANSWER:\n%s\n\n\
+ADMIN:\n%s %s",
         gAskLogID[log_index],
         status,
         gAskLogRequester[log_index],
@@ -2805,39 +2931,80 @@ stock CRP_AdminShowMainPanel(playerid)
 
     list[0] = EOS;
 
-    strcat(list, "Admin List\n");
+    strcat(
+        list,
+        "Admin List\n"
+    );
 
-    if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] >=
+        ADMIN_HELPER
+    )
     {
-        strcat(list, "Admin Duty\n");
+        strcat(
+            list,
+            "Admin Duty\n"
+        );
     }
 
-    strcat(list, "Admins\n");
+    strcat(
+        list,
+        "Admins\n"
+    );
 
-    if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] >=
+        ADMIN_HELPER
+    )
     {
-        strcat(list, "My Bans\n");
+        strcat(
+            list,
+            "My Bans\n"
+        );
     }
 
-    strcat(list, "Logs\n");
-    strcat(list, "Reports");
+    strcat(
+        list,
+        "Logs\n"
+    );
 
-    if(CRP_AdminCanAccessAdminSettings(playerid))
+    strcat(
+        list,
+        "Reports"
+    );
+
+    if(
+        CRP_AdminCanAccessAdminSettings(playerid)
+    )
     {
-        strcat(list, "\nAdmin Settings");
+        strcat(
+            list,
+            "\nAdmin Settings"
+        );
     }
 
-    if(CRP_AdminCanAccessMoneySettings(playerid))
+    if(
+        CRP_AdminCanAccessMoneySettings(playerid)
+    )
     {
-        strcat(list, "\nMoney Settings");
+        strcat(
+            list,
+            "\nMoney Settings"
+        );
     }
 
-    if(CRP_AdminCanAccessAdminDivision(playerid))
+    if(
+        CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
-        strcat(list, "\nAdmin Division");
+        strcat(
+            list,
+            "\nAdmin Division"
+        );
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MAIN;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_MAIN;
 
     ShowPlayerDialog(
         playerid,
@@ -2871,7 +3038,8 @@ stock CRP_AdminShowList(playerid)
         sizeof(list)
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_LIST;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_LIST;
 
     ShowPlayerDialog(
         playerid,
@@ -2887,7 +3055,10 @@ stock CRP_AdminShowList(playerid)
 }
 
 
-stock CRP_AdminBuildList(output[], size)
+stock CRP_AdminBuildList(
+    output[],
+    size
+)
 {
     output[0] = EOS;
 
@@ -2909,7 +3080,10 @@ stock CRP_AdminBuildList(output[], size)
             continue;
         }
 
-        new rankname[ADMIN_RANKNAME_LENGTH];
+        new rankname[
+            ADMIN_RANKNAME_LENGTH
+        ];
+
         new dutyname[16];
         new line[128];
 
@@ -2921,16 +3095,29 @@ stock CRP_AdminBuildList(output[], size)
 
         if(gPlayerAdminDuty[i])
         {
-            format(dutyname, sizeof(dutyname), "ON");
+            format(
+                dutyname,
+                sizeof(dutyname),
+                "ON"
+            );
         }
         else
         {
-            format(dutyname, sizeof(dutyname), "OFF");
+            format(
+                dutyname,
+                sizeof(dutyname),
+                "OFF"
+            );
         }
 
-        new seconds = CRP_AdminGetDutySeconds(i);
-        new hours = seconds / 3600;
-        new minutes = (seconds % 3600) / 60;
+        new seconds =
+            CRP_AdminGetDutySeconds(i);
+
+        new hours =
+            seconds / 3600;
+
+        new minutes =
+            (seconds % 3600) / 60;
 
         format(
             line,
@@ -2943,7 +3130,10 @@ stock CRP_AdminBuildList(output[], size)
             minutes
         );
 
-        strcat(output, line);
+        strcat(
+            output,
+            line
+        );
     }
 
     return 1;
@@ -2961,7 +3151,10 @@ stock CRP_AdminShowDuty(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] <
+        ADMIN_HELPER
+    )
     {
         return 0;
     }
@@ -2991,9 +3184,14 @@ stock CRP_AdminShowDuty(playerid)
             continue;
         }
 
-        new seconds = CRP_AdminGetDutySeconds(i);
-        new hours = seconds / 3600;
-        new minutes = (seconds % 3600) / 60;
+        new seconds =
+            CRP_AdminGetDutySeconds(i);
+
+        new hours =
+            seconds / 3600;
+
+        new minutes =
+            (seconds % 3600) / 60;
 
         new line[96];
 
@@ -3006,10 +3204,14 @@ stock CRP_AdminShowDuty(playerid)
             minutes
         );
 
-        strcat(list, line);
+        strcat(
+            list,
+            line
+        );
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_DUTY;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_DUTY;
 
     ShowPlayerDialog(
         playerid,
@@ -3056,7 +3258,10 @@ stock CRP_AdminShowAdmins(playerid)
             continue;
         }
 
-        new rankname[ADMIN_RANKNAME_LENGTH];
+        new rankname[
+            ADMIN_RANKNAME_LENGTH
+        ];
+
         new status[16];
         new line[160];
 
@@ -3068,16 +3273,29 @@ stock CRP_AdminShowAdmins(playerid)
 
         if(gPlayerAdminDuty[i])
         {
-            format(status, sizeof(status), "ON DUTY");
+            format(
+                status,
+                sizeof(status),
+                "ON DUTY"
+            );
         }
         else
         {
-            format(status, sizeof(status), "OFF DUTY");
+            format(
+                status,
+                sizeof(status),
+                "OFF DUTY"
+            );
         }
 
-        new seconds = CRP_AdminGetDutySeconds(i);
-        new hours = seconds / 3600;
-        new minutes = (seconds % 3600) / 60;
+        new seconds =
+            CRP_AdminGetDutySeconds(i);
+
+        new hours =
+            seconds / 3600;
+
+        new minutes =
+            (seconds % 3600) / 60;
 
         format(
             line,
@@ -3090,10 +3308,14 @@ stock CRP_AdminShowAdmins(playerid)
             minutes
         );
 
-        strcat(list, line);
+        strcat(
+            list,
+            line
+        );
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMINS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ADMINS;
 
     ShowPlayerDialog(
         playerid,
@@ -3120,7 +3342,10 @@ stock CRP_AdminShowMyBans(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] <
+        ADMIN_HELPER
+    )
     {
         return 0;
     }
@@ -3131,10 +3356,11 @@ stock CRP_AdminShowMyBans(playerid)
         list,
         sizeof(list),
         "Character\n\
-        UCP"
+UCP"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_MY_BANS;
 
     ShowPlayerDialog(
         playerid,
@@ -3161,12 +3387,16 @@ stock CRP_AdminShowMyCharacterBans(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] <
+        ADMIN_HELPER
+    )
     {
         return 0;
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_MY_BANS;
 
     CallRemoteFunction(
         "CRP_AdminLogsOpenMyBansCharacter",
@@ -3189,12 +3419,16 @@ stock CRP_AdminShowMyUCPBans(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] <
+        ADMIN_HELPER
+    )
     {
         return 0;
     }
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MY_BANS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_MY_BANS;
 
     CallRemoteFunction(
         "CRP_AdminLogsOpenMyBansUCP",
@@ -3227,23 +3461,43 @@ public CRP_AdminMyBanAction(
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+    if(
+        gPlayerAdminRank[playerid] <
+        ADMIN_HELPER
+    )
     {
         return 0;
     }
 
-    gSelectedMyBanType[playerid] = type;
-    gSelectedMyBanAction[playerid] = action;
+    gSelectedMyBanType[playerid] =
+        type;
+
+    gSelectedMyBanAction[playerid] =
+        action;
 
     new actionname[32];
 
-    if(action == ADMIN_BAN_ACTION_UNBAN)
+    if(
+        action ==
+        ADMIN_BAN_ACTION_UNBAN
+    )
     {
-        format(actionname, sizeof(actionname), "Unban");
+        format(
+            actionname,
+            sizeof(actionname),
+            "Unban"
+        );
     }
-    else if(action == ADMIN_BAN_ACTION_UNBLOCK)
+    else if(
+        action ==
+        ADMIN_BAN_ACTION_UNBLOCK
+    )
     {
-        format(actionname, sizeof(actionname), "Unblock");
+        format(
+            actionname,
+            sizeof(actionname),
+            "Unblock"
+        );
     }
     else
     {
@@ -3284,8 +3538,11 @@ stock CRP_AdminConfirmMyBanAction(playerid)
         return 0;
     }
 
-    new type = gSelectedMyBanType[playerid];
-    new action = gSelectedMyBanAction[playerid];
+    new type =
+        gSelectedMyBanType[playerid];
+
+    new action =
+        gSelectedMyBanAction[playerid];
 
     CallRemoteFunction(
         "CRP_AdminLogsExecuteMyBanAction",
@@ -3316,16 +3573,17 @@ stock CRP_AdminShowLogs(playerid)
         list,
         sizeof(list),
         "Ban\n\
-        Kick\n\
-        Jail\n\
-        Warning\n\
-        Mute\n\
-        Reports\n\
-        Faction and Families\n\
-        ASK"
+Kick\n\
+Jail\n\
+Warning\n\
+Mute\n\
+Reports\n\
+Faction and Families\n\
+ASK"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_LOGS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_LOGS;
 
     ShowPlayerDialog(
         playerid,
@@ -3363,7 +3621,7 @@ stock CRP_AdminShowReportLogs(playerid)
 
 
 // ============================================================
-// FACTION AND FAMILIES LOG MENU
+// FACTION / FAMILIES LOG MENU
 // ============================================================
 
 stock CRP_AdminShowFactionFamilyLogs(playerid)
@@ -3374,7 +3632,8 @@ stock CRP_AdminShowFactionFamilyLogs(playerid)
     }
 
     if(
-        gPlayerAdminRank[playerid] < ADMIN_SERVER_DIRECTOR &&
+        gPlayerAdminRank[playerid] <
+        ADMIN_SERVER_DIRECTOR &&
         !CRP_AdminIsFactionFamilyHandler(playerid)
     )
     {
@@ -3393,10 +3652,11 @@ stock CRP_AdminShowFactionFamilyLogs(playerid)
         list,
         sizeof(list),
         "Faction\n\
-        Families"
+Families"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_LOG_FACTION;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_LOG_FACTION;
 
     ShowPlayerDialog(
         playerid,
@@ -3418,7 +3678,9 @@ stock CRP_AdminShowFactionFamilyLogs(playerid)
 
 stock CRP_AdminShowAdminSettings(playerid)
 {
-    if(!CRP_AdminCanAccessAdminSettings(playerid))
+    if(
+        !CRP_AdminCanAccessAdminSettings(playerid)
+    )
     {
         return 0;
     }
@@ -3429,11 +3691,12 @@ stock CRP_AdminShowAdminSettings(playerid)
         list,
         sizeof(list),
         "Admin\n\
-        Helper Staff\n\
-        Intern Staff"
+Helper Staff\n\
+Intern Staff"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMIN_SETTINGS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ADMIN_SETTINGS;
 
     ShowPlayerDialog(
         playerid,
@@ -3455,7 +3718,9 @@ stock CRP_AdminShowAdminSettings(playerid)
 
 stock CRP_AdminShowMoneySettings(playerid)
 {
-    if(!CRP_AdminCanAccessMoneySettings(playerid))
+    if(
+        !CRP_AdminCanAccessMoneySettings(playerid)
+    )
     {
         return 0;
     }
@@ -3466,11 +3731,12 @@ stock CRP_AdminShowMoneySettings(playerid)
         list,
         sizeof(list),
         "Set Cash\n\
-        Give Money\n\
-        Money For All"
+Give Money\n\
+Money For All"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_MONEY_SETTINGS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_MONEY_SETTINGS;
 
     ShowPlayerDialog(
         playerid,
@@ -3492,7 +3758,9 @@ stock CRP_AdminShowMoneySettings(playerid)
 
 stock CRP_AdminShowAdminDivision(playerid)
 {
-    if(!CRP_AdminCanAccessAdminDivision(playerid))
+    if(
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
         return 0;
     }
@@ -3503,10 +3771,11 @@ stock CRP_AdminShowAdminDivision(playerid)
         list,
         sizeof(list),
         "Factions and Families\n\
-        Houses and Business"
+Houses and Business"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMIN_DIVISION;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ADMIN_DIVISION;
 
     ShowPlayerDialog(
         playerid,
@@ -3528,7 +3797,9 @@ stock CRP_AdminShowAdminDivision(playerid)
 
 stock CRP_AdminShowFactionDivision(playerid)
 {
-    if(!CRP_AdminCanAccessAdminDivision(playerid))
+    if(
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
         return 0;
     }
@@ -3539,11 +3810,12 @@ stock CRP_AdminShowFactionDivision(playerid)
         list,
         sizeof(list),
         "Factions and Families\n\
-        Choose Admin Handler\n\
-        Handler List"
+Choose Admin Handler\n\
+Handler List"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FACTION_DIV;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_FACTION_DIV;
 
     ShowPlayerDialog(
         playerid,
@@ -3565,7 +3837,9 @@ stock CRP_AdminShowFactionDivision(playerid)
 
 stock CRP_AdminShowHouseBusiness(playerid)
 {
-    if(!CRP_AdminCanAccessAdminDivision(playerid))
+    if(
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
         return 0;
     }
@@ -3576,11 +3850,12 @@ stock CRP_AdminShowHouseBusiness(playerid)
         list,
         sizeof(list),
         "Houses and Business\n\
-        Choose Admin Handler\n\
-        Handler List"
+Choose Admin Handler\n\
+Handler List"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_HOUSE_BUSINESS;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_HOUSE_BUSINESS;
 
     ShowPlayerDialog(
         playerid,
@@ -3616,12 +3891,13 @@ stock CRP_AdminShowFactionList(playerid)
         list,
         sizeof(list),
         "LSPD\n\
-        LSMD\n\
-        LAN\n\
-        GOV"
+LSMD\n\
+LAN\n\
+GOV"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FACTION_LIST;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_FACTION_LIST;
 
     ShowPlayerDialog(
         playerid,
@@ -3657,18 +3933,19 @@ stock CRP_AdminShowFamilyList(playerid)
         list,
         sizeof(list),
         "Family Slot 1\n\
-        Family Slot 2\n\
-        Family Slot 3\n\
-        Family Slot 4\n\
-        Family Slot 5\n\
-        Family Slot 6\n\
-        Family Slot 7\n\
-        Family Slot 8\n\
-        Family Slot 9\n\
-        Family Slot 10"
+Family Slot 2\n\
+Family Slot 3\n\
+Family Slot 4\n\
+Family Slot 5\n\
+Family Slot 6\n\
+Family Slot 7\n\
+Family Slot 8\n\
+Family Slot 9\n\
+Family Slot 10"
     );
 
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_FAMILIES;
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_FAMILIES;
 
     ShowPlayerDialog(
         playerid,
@@ -3688,9 +3965,14 @@ stock CRP_AdminShowFamilyList(playerid)
 // HANDLER LIST
 // ============================================================
 
-stock CRP_AdminShowHandlerList(playerid, division)
+stock CRP_AdminShowHandlerList(
+    playerid,
+    division
+)
 {
-    if(!CRP_AdminCanAccessAdminDivision(playerid))
+    if(
+        !CRP_AdminCanAccessAdminDivision(playerid)
+    )
     {
         return 0;
     }
@@ -3703,13 +3985,18 @@ stock CRP_AdminShowHandlerList(playerid, division)
         "Account Username\tDivision\n"
     );
 
-    if(division == ADMIN_DIVISION_FACTION_FAMILY)
+    if(
+        division ==
+        ADMIN_DIVISION_FACTION_FAMILY
+    )
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(CRP_AdminIsAccountEmpty(
-                gFactionFamilyHandlerAccount[i]
-            ))
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                )
+            )
             {
                 continue;
             }
@@ -3723,16 +4010,24 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 gFactionFamilyHandlerAccount[i]
             );
 
-            strcat(list, line);
+            strcat(
+                list,
+                line
+            );
         }
     }
-    else if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
+    else if(
+        division ==
+        ADMIN_DIVISION_HOUSE_BUSINESS
+    )
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(CRP_AdminIsAccountEmpty(
-                gHouseBusinessHandlerAccount[i]
-            ))
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                )
+            )
             {
                 continue;
             }
@@ -3746,12 +4041,18 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 gHouseBusinessHandlerAccount[i]
             );
 
-            strcat(list, line);
+            strcat(
+                list,
+                line
+            );
         }
     }
 
-    gSelectedHandlerDivision[playerid] = division;
-    gPlayerAdminPanel[playerid] = ADMIN_PANEL_HANDLER_LIST;
+    gSelectedHandlerDivision[playerid] =
+        division;
+
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_HANDLER_LIST;
 
     ShowPlayerDialog(
         playerid,
@@ -3771,9 +4072,14 @@ stock CRP_AdminShowHandlerList(playerid, division)
 // HANDLER ASSIGNMENT VALIDATION
 // ============================================================
 
-stock CRP_AdminCanAssignHandler(actorid, targetid)
+stock CRP_AdminCanAssignHandler(
+    actorid,
+    targetid
+)
 {
-    if(!CRP_AdminCanAccessAdminDivision(actorid))
+    if(
+        !CRP_AdminCanAccessAdminDivision(actorid)
+    )
     {
         return 0;
     }
@@ -3788,7 +4094,12 @@ stock CRP_AdminCanAssignHandler(actorid, targetid)
         return 0;
     }
 
-    if(!CRP_AdminCanTarget(actorid, targetid))
+    if(
+        !CRP_AdminCanTarget(
+            actorid,
+            targetid
+        )
+    )
     {
         return 0;
     }
@@ -3798,10 +4109,13 @@ stock CRP_AdminCanAssignHandler(actorid, targetid)
 
 
 // ============================================================
-// ASSIGN FACTION/FAMILY HANDLER
+// ASSIGN FACTION / FAMILY HANDLER
 // ============================================================
 
-stock CRP_AdminSetFactionFamilyHandler(targetid, state)
+stock CRP_AdminSetFactionFamilyHandler(
+    targetid,
+    state
+)
 {
     if(!CRP_AdminIsValidPlayer(targetid))
     {
@@ -3810,7 +4124,9 @@ stock CRP_AdminSetFactionFamilyHandler(targetid, state)
 
     if(state)
     {
-        if(!CRP_AdminCanBecomeHandler(targetid))
+        if(
+            !CRP_AdminCanBecomeHandler(targetid)
+        )
         {
             return 0;
         }
@@ -3834,9 +4150,11 @@ stock CRP_AdminSetFactionFamilyHandler(targetid, state)
 
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(CRP_AdminIsAccountEmpty(
-                gFactionFamilyHandlerAccount[i]
-            ))
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gFactionFamilyHandlerAccount[i]
+                )
+            )
             {
                 format(
                     gFactionFamilyHandlerAccount[i],
@@ -3857,18 +4175,24 @@ stock CRP_AdminSetFactionFamilyHandler(targetid, state)
         gPlayerAccountUsername[targetid]
     );
 
-    gPlayerActiveFaction[targetid] = ADMIN_FACTION_NONE;
-    gPlayerActiveFamily[targetid] = ADMIN_FAMILY_NONE;
+    gPlayerActiveFaction[targetid] =
+        ADMIN_FACTION_NONE;
+
+    gPlayerActiveFamily[targetid] =
+        ADMIN_FAMILY_NONE;
 
     return 1;
 }
 
 
 // ============================================================
-// ASSIGN HOUSE/BUSINESS HANDLER
+// ASSIGN HOUSE / BUSINESS HANDLER
 // ============================================================
 
-stock CRP_AdminSetHouseBusinessHandler(targetid, state)
+stock CRP_AdminSetHouseBusinessHandler(
+    targetid,
+    state
+)
 {
     if(!CRP_AdminIsValidPlayer(targetid))
     {
@@ -3877,7 +4201,9 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
     if(state)
     {
-        if(!CRP_AdminCanBecomeHandler(targetid))
+        if(
+            !CRP_AdminCanBecomeHandler(targetid)
+        )
         {
             return 0;
         }
@@ -3901,9 +4227,11 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(CRP_AdminIsAccountEmpty(
-                gHouseBusinessHandlerAccount[i]
-            ))
+            if(
+                CRP_AdminIsAccountEmpty(
+                    gHouseBusinessHandlerAccount[i]
+                )
+            )
             {
                 format(
                     gHouseBusinessHandlerAccount[i],
@@ -3929,12 +4257,17 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
 
 // ============================================================
-// FACTION IN / OUT
+// FACTION IN
 // ============================================================
 
-stock CRP_AdminFactionIn(playerid, faction)
+stock CRP_AdminFactionIn(
+    playerid,
+    faction
+)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
         return 0;
     }
@@ -3948,40 +4281,57 @@ stock CRP_AdminFactionIn(playerid, faction)
     }
 
     if(
-        gPlayerActiveFaction[playerid] != ADMIN_FACTION_NONE &&
-        gPlayerActiveFaction[playerid] != faction
+        gPlayerActiveFaction[playerid] !=
+        ADMIN_FACTION_NONE &&
+        gPlayerActiveFaction[playerid] !=
+        faction
     )
     {
         return 0;
     }
 
-    gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
-    gPlayerActiveFaction[playerid] = faction;
+    gPlayerActiveFamily[playerid] =
+        ADMIN_FAMILY_NONE;
+
+    gPlayerActiveFaction[playerid] =
+        faction;
 
     return 1;
 }
 
 
+// ============================================================
+// FACTION OUT
+// ============================================================
+
 stock CRP_AdminFactionOut(playerid)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
         return 0;
     }
 
-    gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
+    gPlayerActiveFaction[playerid] =
+        ADMIN_FACTION_NONE;
 
     return 1;
 }
 
 
 // ============================================================
-// FAMILY IN / OUT
+// FAMILY IN
 // ============================================================
 
-stock CRP_AdminFamilyIn(playerid, family)
+stock CRP_AdminFamilyIn(
+    playerid,
+    family
+)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
         return 0;
     }
@@ -3995,28 +4345,40 @@ stock CRP_AdminFamilyIn(playerid, family)
     }
 
     if(
-        gPlayerActiveFamily[playerid] != ADMIN_FAMILY_NONE &&
-        gPlayerActiveFamily[playerid] != family
+        gPlayerActiveFamily[playerid] !=
+        ADMIN_FAMILY_NONE &&
+        gPlayerActiveFamily[playerid] !=
+        family
     )
     {
         return 0;
     }
 
-    gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
-    gPlayerActiveFamily[playerid] = family;
+    gPlayerActiveFaction[playerid] =
+        ADMIN_FACTION_NONE;
+
+    gPlayerActiveFamily[playerid] =
+        family;
 
     return 1;
 }
 
 
+// ============================================================
+// FAMILY OUT
+// ============================================================
+
 stock CRP_AdminFamilyOut(playerid)
 {
-    if(!CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        !CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
         return 0;
     }
 
-    gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
+    gPlayerActiveFamily[playerid] =
+        ADMIN_FAMILY_NONE;
 
     return 1;
 }
@@ -4049,7 +4411,10 @@ public CRP_AdminIsDeveloperRemote(playerid)
 }
 
 
-public CRP_AdminCanTargetRemote(actorid, targetid)
+public CRP_AdminCanTargetRemote(
+    actorid,
+    targetid
+)
 {
     return CRP_AdminCanTarget(
         actorid,
@@ -4065,12 +4430,16 @@ public CRP_AdminGetDivision(playerid)
         return ADMIN_DIVISION_NONE;
     }
 
-    if(CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
         return ADMIN_DIVISION_FACTION_FAMILY;
     }
 
-    if(CRP_AdminIsHouseBusinessHandler(playerid))
+    if(
+        CRP_AdminIsHouseBusinessHandler(playerid)
+    )
     {
         return ADMIN_DIVISION_HOUSE_BUSINESS;
     }
@@ -4108,9 +4477,14 @@ public CRP_AdminGetHandlerType(playerid)
         return ADMIN_HANDLER_NONE;
     }
 
-    if(CRP_AdminIsFactionFamilyHandler(playerid))
+    if(
+        CRP_AdminIsFactionFamilyHandler(playerid)
+    )
     {
-        if(gPlayerActiveFamily[playerid] != ADMIN_FAMILY_NONE)
+        if(
+            gPlayerActiveFamily[playerid] !=
+            ADMIN_FAMILY_NONE
+        )
         {
             return ADMIN_HANDLER_FAMILY;
         }
@@ -4118,7 +4492,9 @@ public CRP_AdminGetHandlerType(playerid)
         return ADMIN_HANDLER_FACTION;
     }
 
-    if(CRP_AdminIsHouseBusinessHandler(playerid))
+    if(
+        CRP_AdminIsHouseBusinessHandler(playerid)
+    )
     {
         return ADMIN_HANDLER_HOUSE;
     }
@@ -4150,7 +4526,10 @@ public CRP_AdminGetAccountUsername(
 }
 
 
-public CRP_AdminSetRankRemote(playerid, rank)
+public CRP_AdminSetRankRemote(
+    playerid,
+    rank
+)
 {
     if(!CRP_AdminIsValidPlayer(playerid))
     {
@@ -4165,13 +4544,17 @@ public CRP_AdminSetRankRemote(playerid, rank)
         return 0;
     }
 
-    gPlayerAdminRank[playerid] = rank;
+    gPlayerAdminRank[playerid] =
+        rank;
 
     return 1;
 }
 
 
-public CRP_AdminSetFactionRemote(playerid, faction)
+public CRP_AdminSetFactionRemote(
+    playerid,
+    faction
+)
 {
     return CRP_AdminFactionIn(
         playerid,
@@ -4180,7 +4563,10 @@ public CRP_AdminSetFactionRemote(playerid, faction)
 }
 
 
-public CRP_AdminSetFamilyRemote(playerid, family)
+public CRP_AdminSetFamilyRemote(
+    playerid,
+    family
+)
 {
     return CRP_AdminFamilyIn(
         playerid,
@@ -4219,6 +4605,7 @@ public OnDialogResponse(
             {
                 gPlayerAdminPanel[playerid] =
                     ADMIN_PANEL_NONE;
+
                 return 1;
             }
 
@@ -4377,7 +4764,10 @@ public OnDialogResponse(
 
         index++;
 
-        if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+        if(
+            gPlayerAdminRank[playerid] >=
+            ADMIN_HELPER
+        )
         {
             if(listitem == index)
             {
@@ -4396,7 +4786,10 @@ public OnDialogResponse(
 
         index++;
 
-        if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
+        if(
+            gPlayerAdminRank[playerid] >=
+            ADMIN_HELPER
+        )
         {
             if(listitem == index)
             {
@@ -4423,7 +4816,9 @@ public OnDialogResponse(
 
         index++;
 
-        if(CRP_AdminCanAccessAdminSettings(playerid))
+        if(
+            CRP_AdminCanAccessAdminSettings(playerid)
+        )
         {
             if(listitem == index)
             {
@@ -4434,7 +4829,9 @@ public OnDialogResponse(
             index++;
         }
 
-        if(CRP_AdminCanAccessMoneySettings(playerid))
+        if(
+            CRP_AdminCanAccessMoneySettings(playerid)
+        )
         {
             if(listitem == index)
             {
@@ -4445,7 +4842,9 @@ public OnDialogResponse(
             index++;
         }
 
-        if(CRP_AdminCanAccessAdminDivision(playerid))
+        if(
+            CRP_AdminCanAccessAdminDivision(playerid)
+        )
         {
             if(listitem == index)
             {
@@ -4464,7 +4863,10 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_MY_BANS)
     {
-        if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+        if(
+            gPlayerAdminRank[playerid] <
+            ADMIN_HELPER
+        )
         {
             return 1;
         }
@@ -4476,7 +4878,9 @@ public OnDialogResponse(
                 gSelectedMyBanType[playerid] =
                     ADMIN_MY_BANS_CHARACTER;
 
-                CRP_AdminShowMyCharacterBans(playerid);
+                CRP_AdminShowMyCharacterBans(
+                    playerid
+                );
             }
 
             case 1:
@@ -4484,7 +4888,9 @@ public OnDialogResponse(
                 gSelectedMyBanType[playerid] =
                     ADMIN_MY_BANS_UCP;
 
-                CRP_AdminShowMyUCPBans(playerid);
+                CRP_AdminShowMyUCPBans(
+                    playerid
+                );
             }
         }
 
@@ -4542,7 +4948,9 @@ public OnDialogResponse(
 
                 case 2:
                 {
-                    CRP_AdminShowMyUCPBans(playerid);
+                    CRP_AdminShowMyUCPBans(
+                        playerid
+                    );
                 }
             }
 
@@ -4561,7 +4969,9 @@ public OnDialogResponse(
     {
         if(response)
         {
-            CRP_AdminConfirmMyBanAction(playerid);
+            CRP_AdminConfirmMyBanAction(
+                playerid
+            );
         }
 
         return 1;
@@ -4628,12 +5038,16 @@ public OnDialogResponse(
 
             case 5:
             {
-                CRP_AdminShowReportLogs(playerid);
+                CRP_AdminShowReportLogs(
+                    playerid
+                );
             }
 
             case 6:
             {
-                CRP_AdminShowFactionFamilyLogs(playerid);
+                CRP_AdminShowFactionFamilyLogs(
+                    playerid
+                );
             }
 
             case 7:
@@ -4684,7 +5098,9 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_SETTINGS)
     {
-        if(!CRP_AdminCanAccessAdminSettings(playerid))
+        if(
+            !CRP_AdminCanAccessAdminSettings(playerid)
+        )
         {
             return 1;
         }
@@ -4729,7 +5145,9 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_MONEY_SETTINGS)
     {
-        if(!CRP_AdminCanAccessMoneySettings(playerid))
+        if(
+            !CRP_AdminCanAccessMoneySettings(playerid)
+        )
         {
             return 1;
         }
@@ -4774,7 +5192,9 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_DIVISION)
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
+        if(
+            !CRP_AdminCanAccessAdminDivision(playerid)
+        )
         {
             return 1;
         }
@@ -4783,12 +5203,16 @@ public OnDialogResponse(
         {
             case 0:
             {
-                CRP_AdminShowFactionDivision(playerid);
+                CRP_AdminShowFactionDivision(
+                    playerid
+                );
             }
 
             case 1:
             {
-                CRP_AdminShowHouseBusiness(playerid);
+                CRP_AdminShowHouseBusiness(
+                    playerid
+                );
             }
         }
 
@@ -4797,12 +5221,14 @@ public OnDialogResponse(
 
 
     // ========================================================
-    // FACTIONS AND FAMILIES DIVISION
+    // FACTIONS / FAMILIES DIVISION
     // ========================================================
 
     if(dialogid == DIALOG_ADMIN_FACTION_DIV)
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
+        if(
+            !CRP_AdminCanAccessAdminDivision(playerid)
+        )
         {
             return 1;
         }
@@ -4811,7 +5237,9 @@ public OnDialogResponse(
         {
             case 0:
             {
-                CRP_AdminShowFactionList(playerid);
+                CRP_AdminShowFactionList(
+                    playerid
+                );
             }
 
             case 1:
@@ -4850,7 +5278,10 @@ public OnDialogResponse(
             return 1;
         }
 
-        if(listitem < 0 || listitem > 3)
+        if(
+            listitem < 0 ||
+            listitem > 3
+        )
         {
             return 1;
         }
@@ -4883,7 +5314,10 @@ public OnDialogResponse(
             return 1;
         }
 
-        if(listitem >= 0 && listitem <= 9)
+        if(
+            listitem >= 0 &&
+            listitem <= 9
+        )
         {
             gSelectedFamily[playerid] =
                 listitem + 1;
@@ -4903,12 +5337,14 @@ public OnDialogResponse(
 
 
     // ========================================================
-    // HOUSES AND BUSINESS
+    // HOUSES / BUSINESS
     // ========================================================
 
     if(dialogid == DIALOG_ADMIN_HOUSE_BUSINESS)
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
+        if(
+            !CRP_AdminCanAccessAdminDivision(playerid)
+        )
         {
             return 1;
         }
@@ -4952,7 +5388,17 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_HANDLER_LIST)
     {
-        if(!CRP_AdminCanAccessAdminDivision(playerid))
+        if(
+            !CRP_AdminCanAccessAdminDivision(playerid)
+        )
+        {
+            return 1;
+        }
+
+        if(
+            listitem < 0 ||
+            listitem >= ADMIN_HANDLER_MAX
+        )
         {
             return 1;
         }
@@ -4978,7 +5424,10 @@ public OnDialogResponse(
 
     if(dialogid == DIALOG_ADMIN_ASKS)
     {
-        if(gPlayerAdminRank[playerid] < ADMIN_INTERN)
+        if(
+            gPlayerAdminRank[playerid] <
+            ADMIN_INTERN
+        )
         {
             return 1;
         }
@@ -4993,7 +5442,10 @@ public OnDialogResponse(
 
         for(new i = 0; i < gAskQueueCount; i++)
         {
-            if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+            if(
+                gAskQueueStatus[i] !=
+                ASK_STATUS_ACTIVE
+            )
             {
                 continue;
             }
@@ -5009,7 +5461,10 @@ public OnDialogResponse(
 
         if(current == -1)
         {
-            CRP_AskOpenAdminQueue(playerid);
+            CRP_AskOpenAdminQueue(
+                playerid
+            );
+
             return 1;
         }
 
@@ -5030,11 +5485,17 @@ public OnDialogResponse(
     {
         if(listitem == 0)
         {
-            CRP_AskShowAnswerDialog(playerid);
+            CRP_AskShowAnswerDialog(
+                playerid
+            );
+
             return 1;
         }
 
-        CRP_AskOpenAdminQueue(playerid);
+        CRP_AskOpenAdminQueue(
+            playerid
+        );
+
         return 1;
     }
 
@@ -5047,7 +5508,10 @@ public OnDialogResponse(
     {
         if(inputtext[0] == EOS)
         {
-            CRP_AskShowAnswerDialog(playerid);
+            CRP_AskShowAnswerDialog(
+                playerid
+            );
+
             return 1;
         }
 
@@ -5062,9 +5526,15 @@ public OnDialogResponse(
             return 1;
         }
 
-        if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+        if(
+            gAskQueueStatus[index] !=
+            ASK_STATUS_ACTIVE
+        )
         {
-            CRP_AskOpenAdminQueue(playerid);
+            CRP_AskOpenAdminQueue(
+                playerid
+            );
+
             return 1;
         }
 
@@ -5074,7 +5544,9 @@ public OnDialogResponse(
             inputtext
         );
 
-        CRP_AskOpenAdminQueue(playerid);
+        CRP_AskOpenAdminQueue(
+            playerid
+        );
 
         return 1;
     }
@@ -5094,11 +5566,17 @@ public OnDialogResponse(
         new current = -1;
         new row = 0;
 
-        for(new i = gAskLogCount - 1; i >= 0; i--)
+        for(
+            new i = gAskLogCount - 1;
+            i >= 0;
+            i--
+        )
         {
             if(
-                gAskLogStatus[i] != ASK_STATUS_ANSWERED &&
-                gAskLogStatus[i] != ASK_STATUS_EXPIRED
+                gAskLogStatus[i] !=
+                ASK_STATUS_ANSWERED &&
+                gAskLogStatus[i] !=
+                ASK_STATUS_EXPIRED
             )
             {
                 continue;
@@ -5115,7 +5593,10 @@ public OnDialogResponse(
 
         if(current == -1)
         {
-            CRP_AskShowLogs(playerid);
+            CRP_AskShowLogs(
+                playerid
+            );
+
             return 1;
         }
 
@@ -5189,12 +5670,22 @@ public OnPlayerConnect(playerid)
     gAskMatchCount[playerid] =
         0;
 
-    for(new i = 0; i < ASK_MATCH_MAX_RESULTS; i++)
+    for(
+        new i = 0;
+        i < ASK_MATCH_MAX_RESULTS;
+        i++
+    )
     {
-        gAskMatchLogIndex[playerid][i] = -1;
+        gAskMatchLogIndex[playerid][i] =
+            -1;
+
+        gAskMatchScore[playerid][i] =
+            0;
     }
 
-    CRP_AdminLoadAccountIdentity(playerid);
+    CRP_AdminLoadAccountIdentity(
+        playerid
+    );
 
     return 1;
 }
@@ -5204,21 +5695,37 @@ public OnPlayerConnect(playerid)
 // PLAYER DISCONNECT
 // ============================================================
 
-public OnPlayerDisconnect(playerid, reason)
+public OnPlayerDisconnect(
+    playerid,
+    reason
+)
 {
     if(gPlayerAdminDuty[playerid])
     {
         gPlayerAdminDutyTotal[playerid] +=
-            gettime() - gPlayerAdminDutyStart[playerid];
+            gettime() -
+            gPlayerAdminDutyStart[playerid];
+
+        gPlayerAdminDuty[playerid] =
+            false;
+
+        gPlayerAdminDutyStart[playerid] =
+            0;
     }
 
-    // Active ASK remains stored by player/account data.
-    // The queue itself does NOT disappear simply because the
-    // player disconnects. It will expire normally after 10 min.
+    /*
+     * Active ASK remains in queue.
+     * The player reference is invalidated,
+     * but the ASK itself remains until answered
+     * or expired.
+     */
 
     for(new i = 0; i < gAskQueueCount; i++)
     {
-        if(gAskQueuePlayerID[i] == playerid)
+        if(
+            gAskQueuePlayerID[i] ==
+            playerid
+        )
         {
             gAskQueuePlayerID[i] =
                 INVALID_PLAYER_ID;
@@ -5227,12 +5734,6 @@ public OnPlayerDisconnect(playerid, reason)
 
     gPlayerAdminRank[playerid] =
         ADMIN_NO_STAFF;
-
-    gPlayerAdminDuty[playerid] =
-        false;
-
-    gPlayerAdminDutyStart[playerid] =
-        0;
 
     gPlayerAdminDutyTotal[playerid] =
         0;
@@ -5276,6 +5777,22 @@ public OnPlayerDisconnect(playerid, reason)
     gAskMatchCount[playerid] =
         0;
 
+    for(
+        new i = 0;
+        i < ASK_MATCH_MAX_RESULTS;
+        i++
+    )
+    {
+        gAskMatchLogIndex[playerid][i] =
+            -1;
+
+        gAskMatchScore[playerid][i] =
+            0;
+    }
+
+    gPlayerAccountUsername[playerid][0] =
+        EOS;
+
     return 1;
 }
 
@@ -5302,6 +5819,10 @@ public OnFilterScriptInit()
     print("Admin Division : ENABLED");
     print("Handler Model  : ACCOUNT BASED");
     print("--------------------------------------------------");
+
+    gAskQueueCount = 0;
+    gAskLogCount = 0;
+    gAskNextQueueID = 1;
 
     CRP_AskEnsureStorage();
     CRP_AskLoadCounter();
@@ -5332,7 +5853,9 @@ public CRP_AdminOpenPanel(playerid)
         return 0;
     }
 
-    return CRP_AdminShowMainPanel(playerid);
+    return CRP_AdminShowMainPanel(
+        playerid
+    );
 }
 
 
