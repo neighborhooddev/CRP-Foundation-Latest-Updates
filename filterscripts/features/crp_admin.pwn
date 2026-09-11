@@ -2,13 +2,13 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Admin Panel System v3.1
+// Admin Panel System v3.2
 //
 // File      : filterscripts/features/crp_admin.pwn
 // Developer : Muhammad Rizal
 // Project   : Crystal Roleplay
 //
-// Fokus v3.1:
+// Fokus v3.2:
 // - Admin Panel Foundation
 // - Account Username Identity
 // - RankName + Account Username Admin Identity
@@ -34,6 +34,18 @@
 // - Handler Access Protection
 // - RemoteFunction Bridge
 //
+// ASK SYSTEM v3.2:
+// - ASK Queue
+// - Permanent Queue ID
+// - ASK Logs
+// - ANSWERED Logs
+// - EXPIRED Logs
+// - 10 Minute Queue Expiration
+// - AskBot Similar Question Foundation
+// - AskBot reads ANSWERED ASK Logs only
+// - Admin /asks Bridge
+// - Player /ask Bridge
+//
 // IMPORTANT:
 // Admin Rank is ACCOUNT based.
 // Admin Rank is NOT Character based.
@@ -42,8 +54,12 @@
 // Command implementation belongs to:
 // filterscripts/features/crp_admin_cmd.pwn
 //
-// Persistent log / ban implementation belongs to:
-// filterscripts/features/crp_admin_logs.pwn
+// IMPORTANT:
+// Player /ask command will later belong to:
+// filterscripts/features/crp_basic_player_cmd.pwn
+//
+// ASK data is intentionally stored in THIS FILE.
+// There is NO crp_admin_logs.pwn.
 //
 // No Archives.
 // No Archived Reports.
@@ -147,6 +163,11 @@
 #define ADMIN_PANEL_FACTION_LIST    16
 #define ADMIN_PANEL_HANDLER_LIST    17
 #define ADMIN_PANEL_HANDLER_CONFIRM 18
+#define ADMIN_PANEL_ASKS            19
+#define ADMIN_PANEL_ASK_DETAIL      20
+#define ADMIN_PANEL_ASK_LOGS        21
+#define ADMIN_PANEL_ASK_BOT          22
+#define ADMIN_PANEL_ASK_BOT_DETAIL  23
 
 
 // ============================================================
@@ -194,76 +215,46 @@
 
 
 // ============================================================
-// LIMITS
+// ASK SYSTEM
 // ============================================================
 
-#define ADMIN_USERNAME_LENGTH       25
-#define ADMIN_RANKNAME_LENGTH       32
-#define ADMIN_DIALOG_SIZE            4096
+#define ASK_STATUS_NONE             0
+#define ASK_STATUS_ACTIVE            1
+#define ASK_STATUS_ANSWERED          2
+#define ASK_STATUS_EXPIRED           3
 
-#define ADMIN_FACTION_NAME_LENGTH   32
-#define ADMIN_HANDLER_MAX             50
+#define ASK_MAX_QUEUE               100
+#define ASK_MAX_LOG                 500
 
+#define ASK_QUESTION_LENGTH         192
+#define ASK_ANSWER_LENGTH           192
+#define ASK_USERNAME_LENGTH         25
 
-// ============================================================
-// PLAYER ADMIN DATA
-// ============================================================
+#define ASK_QUEUE_TIMEOUT           600
 
-new gPlayerAdminRank[MAX_PLAYERS];
+#define ASK_STORAGE_DIRECTORY       "scriptfiles/crp_ask"
+#define ASK_QUEUE_FILE              "scriptfiles/crp_ask/queue.txt"
+#define ASK_LOG_FILE                "scriptfiles/crp_ask/logs.txt"
+#define ASK_COUNTER_FILE            "scriptfiles/crp_ask/counter.txt"
 
-new gPlayerAccountUsername[MAX_PLAYERS][ADMIN_USERNAME_LENGTH];
+#define ASK_MATCH_MIN_WORDS         2
+#define ASK_MATCH_MAX_RESULTS       20
 
-new bool:gPlayerAdminDuty[MAX_PLAYERS];
-new gPlayerAdminDutyStart[MAX_PLAYERS];
-new gPlayerAdminDutyTotal[MAX_PLAYERS];
-
-new gPlayerAdminPanel[MAX_PLAYERS];
-
-
-// ============================================================
-// ACCOUNT-BASED HANDLER DATA
-// ============================================================
-//
-// IMPORTANT:
-//
-// Handler assignment is based on Account Username.
-// It is NOT based on Player ID.
-//
-// This means disconnecting does NOT remove the handler
-// assignment.
-//
-// Runtime faction/family membership remains player/session
-// based until the relevant faction/family storage is integrated.
-//
-// ============================================================
-
-new gFactionFamilyHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
-new gHouseBusinessHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
-
-new gFactionHandlerAccount[5][ADMIN_USERNAME_LENGTH];
-new gFamilyHandlerAccount[11][ADMIN_USERNAME_LENGTH];
-
-new gHouseHandlerAccount[ADMIN_USERNAME_LENGTH];
-new gBusinessHandlerAccount[ADMIN_USERNAME_LENGTH];
-
-new gPlayerActiveFaction[MAX_PLAYERS];
-new gPlayerActiveFamily[MAX_PLAYERS];
+#define ASK_SCORE_NONE              0
+#define ASK_SCORE_LOW               1
+#define ASK_SCORE_MEDIUM            2
+#define ASK_SCORE_HIGH              3
 
 
 // ============================================================
-// PLAYER UI CACHE
+// ASK DIALOG IDS
 // ============================================================
 
-new gSelectedAdminTarget[MAX_PLAYERS];
-
-new gSelectedHandlerTarget[MAX_PLAYERS];
-new gSelectedHandlerDivision[MAX_PLAYERS];
-
-new gSelectedFaction[MAX_PLAYERS];
-new gSelectedFamily[MAX_PLAYERS];
-
-new gSelectedMyBanType[MAX_PLAYERS];
-new gSelectedMyBanAction[MAX_PLAYERS];
+#define DIALOG_ADMIN_ASKS           3060
+#define DIALOG_ADMIN_ASK_DETAIL     3061
+#define DIALOG_ADMIN_ASK_ANSWER     3062
+#define DIALOG_ADMIN_ASK_LOGS       3063
+#define DIALOG_ADMIN_ASK_LOG_DETAIL 3064
 
 
 // ============================================================
@@ -300,6 +291,115 @@ new gSelectedMyBanAction[MAX_PLAYERS];
 
 
 // ============================================================
+// ASK RUNTIME QUEUE
+// ============================================================
+
+new gAskQueueID[ASK_MAX_QUEUE];
+new gAskQueueStatus[ASK_MAX_QUEUE];
+new gAskQueueCreated[ASK_MAX_QUEUE];
+
+new gAskQueuePlayerID[ASK_MAX_QUEUE];
+
+new gAskQueueRequester[ASK_MAX_QUEUE][ASK_USERNAME_LENGTH];
+new gAskQueueAccount[ASK_MAX_QUEUE][ASK_USERNAME_LENGTH];
+new gAskQueueQuestion[ASK_MAX_QUEUE][ASK_QUESTION_LENGTH];
+
+new gAskQueueCount;
+new gAskNextQueueID;
+
+
+// ============================================================
+// ASK LOG DATA
+// ============================================================
+
+new gAskLogID[ASK_MAX_LOG];
+new gAskLogStatus[ASK_MAX_LOG];
+new gAskLogCreated[ASK_MAX_LOG];
+new gAskLogAnswered[ASK_MAX_LOG];
+
+new gAskLogRequester[ASK_MAX_LOG][ASK_USERNAME_LENGTH];
+new gAskLogAccount[ASK_MAX_LOG][ASK_USERNAME_LENGTH];
+
+new gAskLogQuestion[ASK_MAX_LOG][ASK_QUESTION_LENGTH];
+new gAskLogAnswer[ASK_MAX_LOG][ASK_ANSWER_LENGTH];
+
+new gAskLogAdminRank[ASK_MAX_LOG][ADMIN_RANKNAME_LENGTH];
+new gAskLogAdminUsername[ASK_MAX_LOG][ASK_USERNAME_LENGTH];
+
+new gAskLogCount;
+
+
+// ============================================================
+// ASK UI CACHE
+// ============================================================
+
+new gSelectedAskQueue[MAX_PLAYERS];
+new gSelectedAskLog[MAX_PLAYERS];
+
+
+// ============================================================
+// ASK MATCH CACHE
+// ============================================================
+//
+// These arrays are used by the future player /ask flow.
+// They are kept inside crp_admin.pwn so AskBot and ASK Logs
+// remain one unified source.
+//
+// ============================================================
+
+new gAskMatchLogIndex[MAX_PLAYERS][ASK_MATCH_MAX_RESULTS];
+new gAskMatchCount[MAX_PLAYERS];
+
+
+// ============================================================
+// PLAYER ADMIN DATA
+// ============================================================
+
+new gPlayerAdminRank[MAX_PLAYERS];
+
+new gPlayerAccountUsername[MAX_PLAYERS][ADMIN_USERNAME_LENGTH];
+
+new bool:gPlayerAdminDuty[MAX_PLAYERS];
+new gPlayerAdminDutyStart[MAX_PLAYERS];
+new gPlayerAdminDutyTotal[MAX_PLAYERS];
+
+new gPlayerAdminPanel[MAX_PLAYERS];
+
+
+// ============================================================
+// ACCOUNT-BASED HANDLER DATA
+// ============================================================
+
+new gFactionFamilyHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
+new gHouseBusinessHandlerAccount[ADMIN_HANDLER_MAX][ADMIN_USERNAME_LENGTH];
+
+new gFactionHandlerAccount[5][ADMIN_USERNAME_LENGTH];
+new gFamilyHandlerAccount[11][ADMIN_USERNAME_LENGTH];
+
+new gHouseHandlerAccount[ADMIN_USERNAME_LENGTH];
+new gBusinessHandlerAccount[ADMIN_USERNAME_LENGTH];
+
+new gPlayerActiveFaction[MAX_PLAYERS];
+new gPlayerActiveFamily[MAX_PLAYERS];
+
+
+// ============================================================
+// PLAYER UI CACHE
+// ============================================================
+
+new gSelectedAdminTarget[MAX_PLAYERS];
+
+new gSelectedHandlerTarget[MAX_PLAYERS];
+new gSelectedHandlerDivision[MAX_PLAYERS];
+
+new gSelectedFaction[MAX_PLAYERS];
+new gSelectedFamily[MAX_PLAYERS];
+
+new gSelectedMyBanType[MAX_PLAYERS];
+new gSelectedMyBanAction[MAX_PLAYERS];
+
+
+// ============================================================
 // FORWARD DECLARATIONS
 // ============================================================
 
@@ -320,6 +420,72 @@ forward CRP_AdminGetAccountUsername(playerid, output[], size);
 forward CRP_AdminSetRankRemote(playerid, rank);
 forward CRP_AdminSetFactionRemote(playerid, faction);
 forward CRP_AdminSetFamilyRemote(playerid, family);
+
+
+// ============================================================
+// ASK FORWARDS
+// ============================================================
+
+forward CRP_AskOpenAdminQueue(playerid);
+forward CRP_AskCreateQueue(
+    playerid,
+    const requester[],
+    const account[],
+    const question[]
+);
+
+forward CRP_AskAnswerQueue(
+    playerid,
+    queueid,
+    const answer[]
+);
+
+forward CRP_AskGetSimilarQuestions(
+    playerid,
+    const question[]
+);
+
+forward CRP_AskGetMatchCount(playerid);
+
+forward CRP_AskGetMatchLog(
+    playerid,
+    match_index
+);
+
+forward CRP_AskGetLogQuestion(
+    log_index,
+    output[],
+    size
+);
+
+forward CRP_AskGetLogAnswer(
+    log_index,
+    output[],
+    size
+);
+
+forward CRP_AskGetLogRequester(
+    log_index,
+    output[],
+    size
+);
+
+forward CRP_AskGetLogAdmin(
+    log_index,
+    output[],
+    size
+);
+
+forward CRP_AskConfirmFallback(
+    playerid,
+    const requester[],
+    const account[],
+    const question[]
+);
+
+forward CRP_AskGetQueueIDForPlayer(playerid);
+
+forward CRP_AskExpireQueues();
 
 
 // ============================================================
@@ -477,10 +643,6 @@ stock CRP_AdminIsDirector(playerid)
 // ============================================================
 // DEVELOPER INTERNAL SETTER
 // ============================================================
-//
-// Rank 10 cannot be assigned through normal Admin Settings.
-//
-// ============================================================
 
 stock CRP_SetDeveloperInternal(playerid)
 {
@@ -521,19 +683,16 @@ stock CRP_AdminCanTarget(actorid, targetid)
         return 0;
     }
 
-    // Developer is completely protected.
     if(CRP_AdminIsDeveloper(targetid))
     {
         return 0;
     }
 
-    // Developer can target lower ranks.
     if(CRP_AdminIsDeveloper(actorid))
     {
         return 1;
     }
 
-    // Same or higher rank cannot be targeted.
     if(gPlayerAdminRank[targetid] >= gPlayerAdminRank[actorid])
     {
         return 0;
@@ -554,12 +713,7 @@ stock CRP_AdminCanAccessAdminSettings(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR)
-    {
-        return 1;
-    }
-
-    return 0;
+    return gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR;
 }
 
 
@@ -574,12 +728,7 @@ stock CRP_AdminCanAccessMoneySettings(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR)
-    {
-        return 1;
-    }
-
-    return 0;
+    return gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR;
 }
 
 
@@ -594,12 +743,7 @@ stock CRP_AdminCanAccessAdminDivision(playerid)
         return 0;
     }
 
-    if(gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR)
-    {
-        return 1;
-    }
-
-    return 0;
+    return gPlayerAdminRank[playerid] >= ADMIN_SERVER_DIRECTOR;
 }
 
 
@@ -614,13 +758,11 @@ stock CRP_AdminCanBecomeHandler(playerid)
         return 0;
     }
 
-    // Minimum Rank 6.
     if(gPlayerAdminRank[playerid] < ADMIN_SUPERVISOR)
     {
         return 0;
     }
 
-    // Developer cannot become a normal handler.
     if(CRP_AdminIsDeveloper(playerid))
     {
         return 0;
@@ -636,12 +778,7 @@ stock CRP_AdminCanBecomeHandler(playerid)
 
 stock CRP_AdminIsAccountEmpty(const account[])
 {
-    if(account[0] == EOS)
-    {
-        return 1;
-    }
-
-    return 0;
+    return account[0] == EOS;
 }
 
 
@@ -725,13 +862,11 @@ stock CRP_AdminRemoveHandlerAccount(
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                !strcmp(
-                    gFactionFamilyHandlerAccount[i],
-                    account,
-                    true
-                )
-            )
+            if(!strcmp(
+                gFactionFamilyHandlerAccount[i],
+                account,
+                true
+            ))
             {
                 gFactionFamilyHandlerAccount[i][0] = EOS;
             }
@@ -744,13 +879,11 @@ stock CRP_AdminRemoveHandlerAccount(
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                !strcmp(
-                    gHouseBusinessHandlerAccount[i],
-                    account,
-                    true
-                )
-            )
+            if(!strcmp(
+                gHouseBusinessHandlerAccount[i],
+                account,
+                true
+            ))
             {
                 gHouseBusinessHandlerAccount[i][0] = EOS;
             }
@@ -772,13 +905,11 @@ stock CRP_AdminIsFactionFamilyHandler(playerid)
 
     for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
     {
-        if(
-            !strcmp(
-                gFactionFamilyHandlerAccount[i],
-                gPlayerAccountUsername[playerid],
-                true
-            )
-        )
+        if(!strcmp(
+            gFactionFamilyHandlerAccount[i],
+            gPlayerAccountUsername[playerid],
+            true
+        ))
         {
             return 1;
         }
@@ -797,13 +928,11 @@ stock CRP_AdminIsHouseBusinessHandler(playerid)
 
     for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
     {
-        if(
-            !strcmp(
-                gHouseBusinessHandlerAccount[i],
-                gPlayerAccountUsername[playerid],
-                true
-            )
-        )
+        if(!strcmp(
+            gHouseBusinessHandlerAccount[i],
+            gPlayerAccountUsername[playerid],
+            true
+        ))
         {
             return 1;
         }
@@ -825,11 +954,9 @@ stock CRP_AdminGetHandlerCount(division)
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                !CRP_AdminIsAccountEmpty(
-                    gFactionFamilyHandlerAccount[i]
-                )
-            )
+            if(!CRP_AdminIsAccountEmpty(
+                gFactionFamilyHandlerAccount[i]
+            ))
             {
                 count++;
             }
@@ -839,11 +966,9 @@ stock CRP_AdminGetHandlerCount(division)
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                !CRP_AdminIsAccountEmpty(
-                    gHouseBusinessHandlerAccount[i]
-                )
-            )
+            if(!CRP_AdminIsAccountEmpty(
+                gHouseBusinessHandlerAccount[i]
+            ))
             {
                 count++;
             }
@@ -887,7 +1012,6 @@ stock CRP_AdminDutyOn(playerid)
         return 0;
     }
 
-    // Intern Staff has no Admin Duty.
     if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
     {
         return 0;
@@ -939,16 +1063,6 @@ stock CRP_AdminDutyOff(playerid)
 // ============================================================
 // ADMIN CHAT
 // ============================================================
-//
-// Format:
-//
-// Developer Defender: message
-// Senior Admin Username: message
-//
-// Account Username only.
-// Character Name is never used.
-//
-// ============================================================
 
 stock CRP_AdminSendChat(playerid, const message[])
 {
@@ -999,23 +1113,1685 @@ stock CRP_AdminSendChat(playerid, const message[])
 
 
 // ============================================================
-// MAIN PANEL
+// ============================================================
+// ASK STORAGE SYSTEM
+// ============================================================
 // ============================================================
 //
-// R1:
-// - Admin List
-// - Admins
-// - My Bans is hidden because My Bans requires R2.
+// IMPORTANT:
+// ASK storage belongs to this file.
 //
-// R2+:
-// - Admin Duty
-// - My Bans
+// No crp_admin_logs.pwn is required.
 //
-// R9+:
-// - Admin Settings
-// - Money Settings
-// - Admin Division
+// Queue:
+// ACTIVE -> ANSWERED
+// ACTIVE -> EXPIRED
 //
+// AskBot:
+// Reads ANSWERED only.
+//
+// ============================================================
+
+
+// ============================================================
+// ASK STRING SANITIZER
+// ============================================================
+
+stock CRP_AskSanitize(const input[], output[], size)
+{
+    new length = strlen(input);
+    new position = 0;
+
+    for(new i = 0; i < length && position < size - 1; i++)
+    {
+        if(input[i] == '|')
+        {
+            output[position++] = '/';
+        }
+        else
+        {
+            output[position++] = input[i];
+        }
+    }
+
+    output[position] = EOS;
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK FILE DIRECTORY
+// ============================================================
+//
+// SA-MP fopen cannot create nested directories.
+// The directory must exist before runtime.
+//
+// The system therefore gracefully falls back to the
+// root scriptfiles path if the directory is unavailable.
+//
+// ============================================================
+
+stock CRP_AskEnsureStorage()
+{
+    new File:file;
+
+    file = fopen(ASK_COUNTER_FILE, io_read);
+
+    if(file)
+    {
+        fclose(file);
+        return 1;
+    }
+
+    file = fopen(ASK_COUNTER_FILE, io_write);
+
+    if(file)
+    {
+        fwrite(file, "0");
+        fclose(file);
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK COUNTER LOAD
+// ============================================================
+
+stock CRP_AskLoadCounter()
+{
+    new File:file = fopen(
+        ASK_COUNTER_FILE,
+        io_read
+    );
+
+    if(!file)
+    {
+        gAskNextQueueID = 1;
+        return 1;
+    }
+
+    new line[32];
+
+    if(fread(file, line))
+    {
+        gAskNextQueueID = strval(line) + 1;
+    }
+    else
+    {
+        gAskNextQueueID = 1;
+    }
+
+    fclose(file);
+
+    if(gAskNextQueueID < 1)
+    {
+        gAskNextQueueID = 1;
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK COUNTER SAVE
+// ============================================================
+
+stock CRP_AskSaveCounter()
+{
+    new File:file = fopen(
+        ASK_COUNTER_FILE,
+        io_write
+    );
+
+    if(!file)
+    {
+        return 0;
+    }
+
+    new line[32];
+
+    format(
+        line,
+        sizeof(line),
+        "%d",
+        gAskNextQueueID - 1
+    );
+
+    fwrite(file, line);
+    fclose(file);
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG SAVE
+// ============================================================
+//
+// Format:
+//
+// ID|STATUS|CREATED|ANSWERED|REQUESTER|ACCOUNT|QUESTION|ANSWER|RANK|ADMIN
+//
+// ============================================================
+
+stock CRP_AskSaveLog(
+    index
+)
+{
+    if(index < 0 || index >= ASK_MAX_LOG)
+    {
+        return 0;
+    }
+
+    new File:file = fopen(
+        ASK_LOG_FILE,
+        io_append
+    );
+
+    if(!file)
+    {
+        return 0;
+    }
+
+    new line[1024];
+
+    format(
+        line,
+        sizeof(line),
+        "%d|%d|%d|%d|%s|%s|%s|%s|%s|%s",
+        gAskLogID[index],
+        gAskLogStatus[index],
+        gAskLogCreated[index],
+        gAskLogAnswered[index],
+        gAskLogRequester[index],
+        gAskLogAccount[index],
+        gAskLogQuestion[index],
+        gAskLogAnswer[index],
+        gAskLogAdminRank[index],
+        gAskLogAdminUsername[index]
+    );
+
+    fwrite(file, line);
+    fclose(file);
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG LOAD
+// ============================================================
+
+stock CRP_AskLoadLogs()
+{
+    gAskLogCount = 0;
+
+    new File:file = fopen(
+        ASK_LOG_FILE,
+        io_read
+    );
+
+    if(!file)
+    {
+        return 1;
+    }
+
+    new line[1024];
+
+    while(fread(file, line))
+    {
+        if(gAskLogCount >= ASK_MAX_LOG)
+        {
+            break;
+        }
+
+        new fields[10][256];
+        new field = 0;
+        new start = 0;
+        new length = strlen(line);
+
+        for(new i = 0; i <= length; i++)
+        {
+            if(line[i] == '|' || line[i] == EOS)
+            {
+                if(field < 10)
+                {
+                    new count = i - start;
+
+                    if(count >= 255)
+                    {
+                        count = 255;
+                    }
+
+                    strmid(
+                        fields[field],
+                        line,
+                        start,
+                        i,
+                        256
+                    );
+
+                    fields[field][count] = EOS;
+                    field++;
+                }
+
+                start = i + 1;
+            }
+        }
+
+        if(field < 10)
+        {
+            continue;
+        }
+
+        new index = gAskLogCount;
+
+        gAskLogID[index] = strval(fields[0]);
+        gAskLogStatus[index] = strval(fields[1]);
+        gAskLogCreated[index] = strval(fields[2]);
+        gAskLogAnswered[index] = strval(fields[3]);
+
+        format(
+            gAskLogRequester[index],
+            ASK_USERNAME_LENGTH,
+            "%s",
+            fields[4]
+        );
+
+        format(
+            gAskLogAccount[index],
+            ASK_USERNAME_LENGTH,
+            "%s",
+            fields[5]
+        );
+
+        format(
+            gAskLogQuestion[index],
+            ASK_QUESTION_LENGTH,
+            "%s",
+            fields[6]
+        );
+
+        format(
+            gAskLogAnswer[index],
+            ASK_ANSWER_LENGTH,
+            "%s",
+            fields[7]
+        );
+
+        format(
+            gAskLogAdminRank[index],
+            ADMIN_RANKNAME_LENGTH,
+            "%s",
+            fields[8]
+        );
+
+        format(
+            gAskLogAdminUsername[index],
+            ASK_USERNAME_LENGTH,
+            "%s",
+            fields[9]
+        );
+
+        gAskLogCount++;
+    }
+
+    fclose(file);
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK ADD LOG
+// ============================================================
+
+stock CRP_AskAddLog(
+    queue_index,
+    status,
+    const answer[],
+    const admin_rank[],
+    const admin_username[]
+)
+{
+    if(queue_index < 0 || queue_index >= ASK_MAX_QUEUE)
+    {
+        return -1;
+    }
+
+    if(gAskLogCount >= ASK_MAX_LOG)
+    {
+        return -1;
+    }
+
+    new index = gAskLogCount;
+
+    gAskLogID[index] =
+        gAskQueueID[queue_index];
+
+    gAskLogStatus[index] =
+        status;
+
+    gAskLogCreated[index] =
+        gAskQueueCreated[queue_index];
+
+    gAskLogAnswered[index] =
+        status == ASK_STATUS_ANSWERED
+        ? gettime()
+        : 0;
+
+    format(
+        gAskLogRequester[index],
+        ASK_USERNAME_LENGTH,
+        "%s",
+        gAskQueueRequester[queue_index]
+    );
+
+    format(
+        gAskLogAccount[index],
+        ASK_USERNAME_LENGTH,
+        "%s",
+        gAskQueueAccount[queue_index]
+    );
+
+    format(
+        gAskLogQuestion[index],
+        ASK_QUESTION_LENGTH,
+        "%s",
+        gAskQueueQuestion[queue_index]
+    );
+
+    format(
+        gAskLogAnswer[index],
+        ASK_ANSWER_LENGTH,
+        "%s",
+        answer
+    );
+
+    format(
+        gAskLogAdminRank[index],
+        ADMIN_RANKNAME_LENGTH,
+        "%s",
+        admin_rank
+    );
+
+    format(
+        gAskLogAdminUsername[index],
+        ASK_USERNAME_LENGTH,
+        "%s",
+        admin_username
+    );
+
+    gAskLogCount++;
+
+    CRP_AskSaveLog(index);
+
+    return index;
+}
+
+
+// ============================================================
+// ASK REMOVE QUEUE SLOT
+// ============================================================
+
+stock CRP_AskRemoveQueue(index)
+{
+    if(index < 0 || index >= gAskQueueCount)
+    {
+        return 0;
+    }
+
+    for(new i = index; i < gAskQueueCount - 1; i++)
+    {
+        gAskQueueID[i] =
+            gAskQueueID[i + 1];
+
+        gAskQueueStatus[i] =
+            gAskQueueStatus[i + 1];
+
+        gAskQueueCreated[i] =
+            gAskQueueCreated[i + 1];
+
+        gAskQueuePlayerID[i] =
+            gAskQueuePlayerID[i + 1];
+
+        format(
+            gAskQueueRequester[i],
+            ASK_USERNAME_LENGTH,
+            "%s",
+            gAskQueueRequester[i + 1]
+        );
+
+        format(
+            gAskQueueAccount[i],
+            ASK_USERNAME_LENGTH,
+            "%s",
+            gAskQueueAccount[i + 1]
+        );
+
+        format(
+            gAskQueueQuestion[i],
+            ASK_QUESTION_LENGTH,
+            "%s",
+            gAskQueueQuestion[i + 1]
+        );
+    }
+
+    gAskQueueCount--;
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK EXPIRE QUEUES
+// ============================================================
+
+public CRP_AskExpireQueues()
+{
+    new now = gettime();
+
+    for(new i = gAskQueueCount - 1; i >= 0; i--)
+    {
+        if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+        {
+            continue;
+        }
+
+        if(now - gAskQueueCreated[i] < ASK_QUEUE_TIMEOUT)
+        {
+            continue;
+        }
+
+        CRP_AskAddLog(
+            i,
+            ASK_STATUS_EXPIRED,
+            "",
+            "",
+            ""
+        );
+
+        new targetid =
+            gAskQueuePlayerID[i];
+
+        if(
+            targetid != INVALID_PLAYER_ID &&
+            CRP_AdminIsValidPlayer(targetid)
+        )
+        {
+            SendClientMessage(
+                targetid,
+                COLOR_YELLOW,
+                "ASK: Pertanyaan kamu telah berakhir karena tidak dijawab dalam 10 menit."
+            );
+        }
+
+        CRP_AskRemoveQueue(i);
+    }
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK CREATE QUEUE
+// ============================================================
+//
+// This function will later be called by
+// crp_basic_player_cmd.pwn after:
+// - Player typed /ask
+// - Preview shown
+// - Player confirmed
+// - AskBot found no useful answer
+// - Player confirmed fallback
+//
+// ============================================================
+
+public CRP_AskCreateQueue(
+    playerid,
+    const requester[],
+    const account[],
+    const question[]
+)
+{
+    if(gAskQueueCount >= ASK_MAX_QUEUE)
+    {
+        return 0;
+    }
+
+    new sanitized_question[ASK_QUESTION_LENGTH];
+
+    CRP_AskSanitize(
+        question,
+        sanitized_question,
+        sizeof(sanitized_question)
+    );
+
+    if(sanitized_question[0] == EOS)
+    {
+        return 0;
+    }
+
+    new index = gAskQueueCount;
+
+    gAskQueueID[index] =
+        gAskNextQueueID;
+
+    gAskNextQueueID++;
+
+    CRP_AskSaveCounter();
+
+    gAskQueueStatus[index] =
+        ASK_STATUS_ACTIVE;
+
+    gAskQueueCreated[index] =
+        gettime();
+
+    gAskQueuePlayerID[index] =
+        playerid;
+
+    format(
+        gAskQueueRequester[index],
+        ASK_USERNAME_LENGTH,
+        "%s",
+        requester
+    );
+
+    format(
+        gAskQueueAccount[index],
+        ASK_USERNAME_LENGTH,
+        "%s",
+        account
+    );
+
+    format(
+        gAskQueueQuestion[index],
+        ASK_QUESTION_LENGTH,
+        "%s",
+        sanitized_question
+    );
+
+    gAskQueueCount++;
+
+    // Notify all online staff.
+    new notice[256];
+
+    format(
+        notice,
+        sizeof(notice),
+        "BotCmd: ASK #%03d masuk ke queue dari %s.",
+        gAskQueueID[index],
+        gAskQueueRequester[index]
+    );
+
+    for(new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if(!CRP_AdminIsValidPlayer(i))
+        {
+            continue;
+        }
+
+        if(!CRP_AdminIsStaff(i))
+        {
+            continue;
+        }
+
+        SendClientMessage(
+            i,
+            COLOR_YELLOW,
+            notice
+        );
+    }
+
+    return gAskQueueID[index];
+}
+
+
+// ============================================================
+// ASK FIND QUEUE BY ID
+// ============================================================
+
+stock CRP_AskFindQueue(queueid)
+{
+    for(new i = 0; i < gAskQueueCount; i++)
+    {
+        if(gAskQueueID[i] == queueid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+
+// ============================================================
+// ASK FIND QUEUE BY PLAYER
+// ============================================================
+
+public CRP_AskGetQueueIDForPlayer(playerid)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    for(new i = 0; i < gAskQueueCount; i++)
+    {
+        if(
+            gAskQueuePlayerID[i] == playerid &&
+            gAskQueueStatus[i] == ASK_STATUS_ACTIVE
+        )
+        {
+            return gAskQueueID[i];
+        }
+    }
+
+    return 0;
+}
+
+
+// ============================================================
+// ASK ANSWER QUEUE
+// ============================================================
+//
+// The admin command layer will validate hierarchy / access
+// before calling this function.
+//
+// ============================================================
+
+public CRP_AskAnswerQueue(
+    playerid,
+    queueid,
+    const answer[]
+)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    new index = CRP_AskFindQueue(queueid);
+
+    if(index == -1)
+    {
+        return 0;
+    }
+
+    if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+    {
+        return 0;
+    }
+
+    new sanitized_answer[ASK_ANSWER_LENGTH];
+
+    CRP_AskSanitize(
+        answer,
+        sanitized_answer,
+        sizeof(sanitized_answer)
+    );
+
+    if(sanitized_answer[0] == EOS)
+    {
+        return 0;
+    }
+
+    new rankname[ADMIN_RANKNAME_LENGTH];
+
+    CRP_GetAdminRankName(
+        gPlayerAdminRank[playerid],
+        rankname,
+        sizeof(rankname)
+    );
+
+    new admin_identity[64];
+
+    format(
+        admin_identity,
+        sizeof(admin_identity),
+        "%s %s",
+        rankname,
+        gPlayerAccountUsername[playerid]
+    );
+
+    CRP_AskAddLog(
+        index,
+        ASK_STATUS_ANSWERED,
+        sanitized_answer,
+        rankname,
+        gPlayerAccountUsername[playerid]
+    );
+
+    new targetid =
+        gAskQueuePlayerID[index];
+
+    if(
+        targetid != INVALID_PLAYER_ID &&
+        CRP_AdminIsValidPlayer(targetid)
+    )
+    {
+        new message[256];
+
+        format(
+            message,
+            sizeof(message),
+            "ASK: %s telah menjawab pertanyaan kamu.",
+            admin_identity
+        );
+
+        SendClientMessage(
+            targetid,
+            COLOR_GREEN,
+            message
+        );
+
+        format(
+            message,
+            sizeof(message),
+            "ANSWER: %s",
+            sanitized_answer
+        );
+
+        SendClientMessage(
+            targetid,
+            COLOR_WHITE,
+            message
+        );
+    }
+
+    // AdminCmd prefix is intentionally used for the action log.
+    new logmessage[256];
+
+    format(
+        logmessage,
+        sizeof(logmessage),
+        "AdminCmd: %s %s menjawab ASK #%03d.",
+        rankname,
+        gPlayerAccountUsername[playerid],
+        queueid
+    );
+
+    for(new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if(!CRP_AdminIsValidPlayer(i))
+        {
+            continue;
+        }
+
+        if(!CRP_AdminIsStaff(i))
+        {
+            continue;
+        }
+
+        SendClientMessage(
+            i,
+            COLOR_GREY,
+            logmessage
+        );
+    }
+
+    CRP_AskRemoveQueue(index);
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK ADMIN QUEUE
+// ============================================================
+
+public CRP_AskOpenAdminQueue(playerid)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    CRP_AskExpireQueues();
+
+    new list[4096];
+
+    format(
+        list,
+        sizeof(list),
+        "QUEUE\tDescription\tQuestioned\n"
+    );
+
+    new count = 0;
+
+    for(new i = 0; i < gAskQueueCount; i++)
+    {
+        if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+        {
+            continue;
+        }
+
+        new line[320];
+
+        format(
+            line,
+            sizeof(line),
+            "#%03d\t%s\t%s\n",
+            gAskQueueID[i],
+            gAskQueueQuestion[i],
+            gAskQueueRequester[i]
+        );
+
+        strcat(
+            list,
+            line
+        );
+
+        count++;
+    }
+
+    if(count == 0)
+    {
+        format(
+            list,
+            sizeof(list),
+            "QUEUE\tDescription\tQuestioned\n"
+            "-\tTidak ada ASK aktif\t-"
+        );
+    }
+
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ASKS;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_ASKS,
+        DIALOG_STYLE_TABLIST_HEADERS,
+        "ASK",
+        list,
+        "PILIH",
+        "KEMBALI"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK DETAIL
+// ============================================================
+
+stock CRP_AskShowQueueDetail(
+    playerid,
+    queue_index
+)
+{
+    if(queue_index < 0 || queue_index >= gAskQueueCount)
+    {
+        return 0;
+    }
+
+    if(gAskQueueStatus[queue_index] != ASK_STATUS_ACTIVE)
+    {
+        return 0;
+    }
+
+    gSelectedAskQueue[playerid] =
+        queue_index;
+
+    new message[512];
+
+    format(
+        message,
+        sizeof(message),
+        "QUEUE #%03d - %s\n\n%s\n\nJawab\tBatal",
+        gAskQueueID[queue_index],
+        gAskQueueRequester[queue_index],
+        gAskQueueQuestion[queue_index]
+    );
+
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ASK_DETAIL;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_ASK_DETAIL,
+        DIALOG_STYLE_LIST,
+        "ASK DETAIL",
+        message,
+        "PILIH",
+        "KEMBALI"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK ANSWER DIALOG
+// ============================================================
+
+stock CRP_AskShowAnswerDialog(playerid)
+{
+    new index =
+        gSelectedAskQueue[playerid];
+
+    if(index < 0 || index >= gAskQueueCount)
+    {
+        return 0;
+    }
+
+    if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+    {
+        return 0;
+    }
+
+    new title[64];
+
+    format(
+        title,
+        sizeof(title),
+        "JAWAB ASK #%03d",
+        gAskQueueID[index]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_ASK_ANSWER,
+        DIALOG_STYLE_INPUT,
+        title,
+        "Masukkan jawaban untuk pertanyaan ini:",
+        "KIRIM",
+        "BATAL"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK BOT WORD NORMALIZATION
+// ============================================================
+
+stock CRP_AskIsFillerWord(const word[])
+{
+    if(!strcmp(word, "aku", true)) return 1;
+    if(!strcmp(word, "saya", true)) return 1;
+    if(!strcmp(word, "bang", true)) return 1;
+    if(!strcmp(word, "kak", true)) return 1;
+    if(!strcmp(word, "min", true)) return 1;
+    if(!strcmp(word, "admin", true)) return 1;
+    if(!strcmp(word, "duh", true)) return 1;
+    if(!strcmp(word, "dong", true)) return 1;
+    if(!strcmp(word, "ya", true)) return 1;
+    if(!strcmp(word, "yah", true)) return 1;
+    if(!strcmp(word, "deh", true)) return 1;
+    if(!strcmp(word, "nih", true)) return 1;
+    if(!strcmp(word, "ini", true)) return 1;
+    if(!strcmp(word, "itu", true)) return 1;
+    if(!strcmp(word, "gimana", true)) return 0;
+    if(!strcmp(word, "gimana?", true)) return 0;
+
+    return 0;
+}
+
+
+// ============================================================
+// ASK BOT WORD CLEANER
+// ============================================================
+
+stock CRP_AskCleanWord(
+    const input[],
+    output[],
+    size
+)
+{
+    new position = 0;
+
+    for(new i = 0; input[i] != EOS && position < size - 1; i++)
+    {
+        if(
+            input[i] == '?' ||
+            input[i] == '!' ||
+            input[i] == '.' ||
+            input[i] == ',' ||
+            input[i] == ':' ||
+            input[i] == ';' ||
+            input[i] == '(' ||
+            input[i] == ')'
+        )
+        {
+            continue;
+        }
+
+        output[position++] =
+            tolower(input[i]);
+    }
+
+    output[position] = EOS;
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK BOT WORD MATCH
+// ============================================================
+
+stock CRP_AskQuestionScore(
+    const question_a[],
+    const question_b[]
+)
+{
+    new words_a[24][32];
+    new words_b[24][32];
+
+    new count_a = 0;
+    new count_b = 0;
+
+    new buffer_a[ASK_QUESTION_LENGTH];
+    new buffer_b[ASK_QUESTION_LENGTH];
+
+    format(
+        buffer_a,
+        sizeof(buffer_a),
+        "%s",
+        question_a
+    );
+
+    format(
+        buffer_b,
+        sizeof(buffer_b),
+        "%s",
+        question_b
+    );
+
+    new start = 0;
+    new length = strlen(buffer_a);
+
+    for(new i = 0; i <= length && count_a < 24; i++)
+    {
+        if(buffer_a[i] == ' ' || buffer_a[i] == EOS)
+        {
+            if(i > start)
+            {
+                new raw[32];
+
+                strmid(
+                    raw,
+                    buffer_a,
+                    start,
+                    i,
+                    sizeof(raw)
+                );
+
+                CRP_AskCleanWord(
+                    raw,
+                    words_a[count_a],
+                    sizeof(words_a[])
+                );
+
+                if(
+                    words_a[count_a][0] != EOS &&
+                    !CRP_AskIsFillerWord(words_a[count_a])
+                )
+                {
+                    count_a++;
+                }
+            }
+
+            start = i + 1;
+        }
+    }
+
+    start = 0;
+    length = strlen(buffer_b);
+
+    for(new i = 0; i <= length && count_b < 24; i++)
+    {
+        if(buffer_b[i] == ' ' || buffer_b[i] == EOS)
+        {
+            if(i > start)
+            {
+                new raw[32];
+
+                strmid(
+                    raw,
+                    buffer_b,
+                    start,
+                    i,
+                    sizeof(raw)
+                );
+
+                CRP_AskCleanWord(
+                    raw,
+                    words_b[count_b],
+                    sizeof(words_b[])
+                );
+
+                if(
+                    words_b[count_b][0] != EOS &&
+                    !CRP_AskIsFillerWord(words_b[count_b])
+                )
+                {
+                    count_b++;
+                }
+            }
+
+            start = i + 1;
+        }
+    }
+
+    if(count_a == 0 || count_b == 0)
+    {
+        return ASK_SCORE_NONE;
+    }
+
+    new matches = 0;
+
+    for(new a = 0; a < count_a; a++)
+    {
+        for(new b = 0; b < count_b; b++)
+        {
+            if(!strcmp(
+                words_a[a],
+                words_b[b],
+                true
+            ))
+            {
+                matches++;
+                break;
+            }
+        }
+    }
+
+    if(matches >= 4)
+    {
+        return ASK_SCORE_HIGH;
+    }
+
+    if(matches >= ASK_MATCH_MIN_WORDS)
+    {
+        return ASK_SCORE_MEDIUM;
+    }
+
+    if(matches == 1)
+    {
+        return ASK_SCORE_LOW;
+    }
+
+    return ASK_SCORE_NONE;
+}
+
+
+// ============================================================
+// ASK BOT SIMILAR QUESTION SEARCH
+// ============================================================
+//
+// IMPORTANT:
+// Only ANSWERED logs are searched.
+//
+// ACTIVE and EXPIRED are never used as AskBot answers.
+//
+// ============================================================
+
+public CRP_AskGetSimilarQuestions(
+    playerid,
+    const question[]
+)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    gAskMatchCount[playerid] = 0;
+
+    new scores[ASK_MATCH_MAX_RESULTS];
+
+    for(new i = 0; i < ASK_MATCH_MAX_RESULTS; i++)
+    {
+        gAskMatchLogIndex[playerid][i] = -1;
+        scores[i] = 0;
+    }
+
+    for(new i = 0; i < gAskLogCount; i++)
+    {
+        if(
+            gAskLogStatus[i] != ASK_STATUS_ANSWERED
+        )
+        {
+            continue;
+        }
+
+        new score =
+            CRP_AskQuestionScore(
+                question,
+                gAskLogQuestion[i]
+            );
+
+        if(score <= ASK_SCORE_NONE)
+        {
+            continue;
+        }
+
+        new insert = gAskMatchCount[playerid];
+
+        if(insert >= ASK_MATCH_MAX_RESULTS)
+        {
+            insert = ASK_MATCH_MAX_RESULTS - 1;
+        }
+
+        for(new j = 0; j < insert; j++)
+        {
+            if(score > scores[j])
+            {
+                for(new k = insert; k > j; k--)
+                {
+                    scores[k] = scores[k - 1];
+                    gAskMatchLogIndex[playerid][k] =
+                        gAskMatchLogIndex[playerid][k - 1];
+                }
+
+                scores[j] = score;
+                gAskMatchLogIndex[playerid][j] = i;
+
+                if(gAskMatchCount[playerid] < ASK_MATCH_MAX_RESULTS)
+                {
+                    gAskMatchCount[playerid]++;
+                }
+
+                insert = -1;
+                break;
+            }
+        }
+
+        if(insert == 0)
+        {
+            scores[0] = score;
+            gAskMatchLogIndex[playerid][0] = i;
+
+            if(gAskMatchCount[playerid] == 0)
+            {
+                gAskMatchCount[playerid] = 1;
+            }
+
+            continue;
+        }
+
+        if(insert >= 0 && insert < ASK_MATCH_MAX_RESULTS)
+        {
+            if(gAskMatchCount[playerid] < ASK_MATCH_MAX_RESULTS)
+            {
+                gAskMatchIndex:
+                gAskMatchLogIndex[playerid][gAskMatchCount[playerid]] = i;
+                scores[gAskMatchCount[playerid]] = score;
+                gAskMatchCount[playerid]++;
+            }
+        }
+    }
+
+    return gAskMatchCount[playerid];
+}
+
+
+// ============================================================
+// ASK BOT MATCH COUNT
+// ============================================================
+
+public CRP_AskGetMatchCount(playerid)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    return gAskMatchCount[playerid];
+}
+
+
+// ============================================================
+// ASK BOT MATCH INDEX
+// ============================================================
+
+public CRP_AskGetMatchLog(
+    playerid,
+    match_index
+)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return -1;
+    }
+
+    if(
+        match_index < 0 ||
+        match_index >= gAskMatchCount[playerid]
+    )
+    {
+        return -1;
+    }
+
+    return gAskMatchLogIndex[playerid][match_index];
+}
+
+
+// ============================================================
+// ASK LOG GET QUESTION
+// ============================================================
+
+public CRP_AskGetLogQuestion(
+    log_index,
+    output[],
+    size
+)
+{
+    if(
+        log_index < 0 ||
+        log_index >= gAskLogCount
+    )
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    format(
+        output,
+        size,
+        "%s",
+        gAskLogQuestion[log_index]
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG GET ANSWER
+// ============================================================
+
+public CRP_AskGetLogAnswer(
+    log_index,
+    output[],
+    size
+)
+{
+    if(
+        log_index < 0 ||
+        log_index >= gAskLogCount
+    )
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    format(
+        output,
+        size,
+        "%s",
+        gAskLogAnswer[log_index]
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG GET REQUESTER
+// ============================================================
+
+public CRP_AskGetLogRequester(
+    log_index,
+    output[],
+    size
+)
+{
+    if(
+        log_index < 0 ||
+        log_index >= gAskLogCount
+    )
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    format(
+        output,
+        size,
+        "%s",
+        gAskLogRequester[log_index]
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG GET ADMIN
+// ============================================================
+
+public CRP_AskGetLogAdmin(
+    log_index,
+    output[],
+    size
+)
+{
+    if(
+        log_index < 0 ||
+        log_index >= gAskLogCount
+    )
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    if(gAskLogStatus[log_index] != ASK_STATUS_ANSWERED)
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    format(
+        output,
+        size,
+        "%s %s",
+        gAskLogAdminRank[log_index],
+        gAskLogAdminUsername[log_index]
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK FALLBACK CONFIRMATION BRIDGE
+// ============================================================
+//
+// Future /ask system calls this only after AskBot has failed
+// to provide a useful answer and the player has confirmed:
+//
+// "Apakah anda yakin Bot Ask List tidak menjawab pertanyaan
+// kamu?"
+//
+// ============================================================
+
+public CRP_AskConfirmFallback(
+    playerid,
+    const requester[],
+    const account[],
+    const question[]
+)
+{
+    return CRP_AskCreateQueue(
+        playerid,
+        requester,
+        account,
+        question
+    );
+}
+
+
+// ============================================================
+// ASK ADMIN LOG VIEW
+// ============================================================
+
+stock CRP_AskShowLogs(playerid)
+{
+    if(!CRP_AdminIsStaff(playerid))
+    {
+        return 0;
+    }
+
+    new list[4096];
+
+    format(
+        list,
+        sizeof(list),
+        "QUEUE\tQuestion\tQuestioned\tStatus\n"
+    );
+
+    new count = 0;
+
+    for(new i = gAskLogCount - 1; i >= 0; i--)
+    {
+        new status[16];
+
+        if(gAskLogStatus[i] == ASK_STATUS_ANSWERED)
+        {
+            format(status, sizeof(status), "ANSWERED");
+        }
+        else if(gAskLogStatus[i] == ASK_STATUS_EXPIRED)
+        {
+            format(status, sizeof(status), "EXPIRED");
+        }
+        else
+        {
+            continue;
+        }
+
+        new line[320];
+
+        format(
+            line,
+            sizeof(line),
+            "#%03d\t%s\t%s\t%s\n",
+            gAskLogID[i],
+            gAskLogQuestion[i],
+            gAskLogRequester[i],
+            status
+        );
+
+        strcat(
+            list,
+            line
+        );
+
+        count++;
+    }
+
+    if(count == 0)
+    {
+        format(
+            list,
+            sizeof(list),
+            "QUEUE\tQuestion\tQuestioned\tStatus\n"
+            "-\tBelum ada ASK Logs\t-\t-"
+        );
+    }
+
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ASK_LOGS;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_ASK_LOGS,
+        DIALOG_STYLE_TABLIST_HEADERS,
+        "ASK LOGS",
+        list,
+        "LIHAT",
+        "KEMBALI"
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// ASK LOG DETAIL
+// ============================================================
+
+stock CRP_AskShowLogDetail(
+    playerid,
+    log_index
+)
+{
+    if(
+        log_index < 0 ||
+        log_index >= gAskLogCount
+    )
+    {
+        return 0;
+    }
+
+    gSelectedAskLog[playerid] =
+        log_index;
+
+    new status[16];
+
+    if(gAskLogStatus[log_index] == ASK_STATUS_ANSWERED)
+    {
+        format(
+            status,
+            sizeof(status),
+            "ANSWERED"
+        );
+    }
+    else
+    {
+        format(
+            status,
+            sizeof(status),
+            "EXPIRED"
+        );
+    }
+
+    new message[768];
+
+    format(
+        message,
+        sizeof(message),
+        "QUEUE #%03d\n\
+        STATUS: %s\n\
+        QUESTIONED: %s\n\n\
+        QUESTION:\n%s\n\n\
+        ANSWER:\n%s\n\n\
+        ADMIN:\n%s %s",
+        gAskLogID[log_index],
+        status,
+        gAskLogRequester[log_index],
+        gAskLogQuestion[log_index],
+        gAskLogAnswer[log_index],
+        gAskLogAdminRank[log_index],
+        gAskLogAdminUsername[log_index]
+    );
+
+    gPlayerAdminPanel[playerid] =
+        ADMIN_PANEL_ASK_LOGS;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_ASK_LOG_DETAIL,
+        DIALOG_STYLE_MSGBOX,
+        "ASK LOG",
+        message,
+        "TUTUP",
+        ""
+    );
+
+    return 1;
+}
+
+
+// ============================================================
+// MAIN PANEL
 // ============================================================
 
 stock CRP_AdminShowMainPanel(playerid)
@@ -1029,66 +2805,36 @@ stock CRP_AdminShowMainPanel(playerid)
 
     list[0] = EOS;
 
-    strcat(
-        list,
-        "Admin List\n"
-    );
+    strcat(list, "Admin List\n");
 
-    // R2+ only.
     if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
     {
-        strcat(
-            list,
-            "Admin Duty\n"
-        );
+        strcat(list, "Admin Duty\n");
     }
 
-    strcat(
-        list,
-        "Admins\n"
-    );
+    strcat(list, "Admins\n");
 
-    // My Bans R2+.
     if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
     {
-        strcat(
-            list,
-            "My Bans\n"
-        );
+        strcat(list, "My Bans\n");
     }
 
-    strcat(
-        list,
-        "Logs\n"
-    );
-
-    strcat(
-        list,
-        "Reports"
-    );
+    strcat(list, "Logs\n");
+    strcat(list, "Reports");
 
     if(CRP_AdminCanAccessAdminSettings(playerid))
     {
-        strcat(
-            list,
-            "\nAdmin Settings"
-        );
+        strcat(list, "\nAdmin Settings");
     }
 
     if(CRP_AdminCanAccessMoneySettings(playerid))
     {
-        strcat(
-            list,
-            "\nMoney Settings"
-        );
+        strcat(list, "\nMoney Settings");
     }
 
     if(CRP_AdminCanAccessAdminDivision(playerid))
     {
-        strcat(
-            list,
-            "\nAdmin Division"
-        );
+        strcat(list, "\nAdmin Division");
     }
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_MAIN;
@@ -1109,15 +2855,6 @@ stock CRP_AdminShowMainPanel(playerid)
 
 // ============================================================
 // ADMIN LIST PANEL
-// ============================================================
-//
-// Intern Staff remains visible while OFF DUTY.
-//
-// OFF DUTY is represented by:
-// OFF
-//
-// Duty time remains 0 when not on duty.
-//
 // ============================================================
 
 stock CRP_AdminShowList(playerid)
@@ -1184,19 +2921,11 @@ stock CRP_AdminBuildList(output[], size)
 
         if(gPlayerAdminDuty[i])
         {
-            format(
-                dutyname,
-                sizeof(dutyname),
-                "ON"
-            );
+            format(dutyname, sizeof(dutyname), "ON");
         }
         else
         {
-            format(
-                dutyname,
-                sizeof(dutyname),
-                "OFF"
-            );
+            format(dutyname, sizeof(dutyname), "OFF");
         }
 
         new seconds = CRP_AdminGetDutySeconds(i);
@@ -1214,10 +2943,7 @@ stock CRP_AdminBuildList(output[], size)
             minutes
         );
 
-        strcat(
-            output,
-            line
-        );
+        strcat(output, line);
     }
 
     return 1;
@@ -1226,12 +2952,6 @@ stock CRP_AdminBuildList(output[], size)
 
 // ============================================================
 // DUTY ONLINE
-// ============================================================
-//
-// Only R2+ can access this panel.
-//
-// Intern Staff has no duty.
-//
 // ============================================================
 
 stock CRP_AdminShowDuty(playerid)
@@ -1286,10 +3006,7 @@ stock CRP_AdminShowDuty(playerid)
             minutes
         );
 
-        strcat(
-            list,
-            line
-        );
+        strcat(list, line);
     }
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_DUTY;
@@ -1310,13 +3027,6 @@ stock CRP_AdminShowDuty(playerid)
 
 // ============================================================
 // ADMINS
-// ============================================================
-//
-// This is the general staff list.
-//
-// Intern Staff appears even when OFF DUTY.
-// Their duty time is 0 while not on duty.
-//
 // ============================================================
 
 stock CRP_AdminShowAdmins(playerid)
@@ -1358,19 +3068,11 @@ stock CRP_AdminShowAdmins(playerid)
 
         if(gPlayerAdminDuty[i])
         {
-            format(
-                status,
-                sizeof(status),
-                "ON DUTY"
-            );
+            format(status, sizeof(status), "ON DUTY");
         }
         else
         {
-            format(
-                status,
-                sizeof(status),
-                "OFF DUTY"
-            );
+            format(status, sizeof(status), "OFF DUTY");
         }
 
         new seconds = CRP_AdminGetDutySeconds(i);
@@ -1388,10 +3090,7 @@ stock CRP_AdminShowAdmins(playerid)
             minutes
         );
 
-        strcat(
-            list,
-            line
-        );
+        strcat(list, line);
     }
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_ADMINS;
@@ -1454,12 +3153,6 @@ stock CRP_AdminShowMyBans(playerid)
 // ============================================================
 // MY BANS CHARACTER
 // ============================================================
-//
-// Persistent data is provided by crp_admin_logs.pwn.
-//
-// Only records created by this Account Username are shown.
-//
-// ============================================================
 
 stock CRP_AdminShowMyCharacterBans(playerid)
 {
@@ -1488,18 +3181,6 @@ stock CRP_AdminShowMyCharacterBans(playerid)
 // ============================================================
 // MY BANS UCP
 // ============================================================
-//
-// Persistent data is provided by crp_admin_logs.pwn.
-//
-// UCP record can expose:
-// - Unblock
-// - Unban
-// - Batal
-//
-// The actual status update remains owned by the log/punishment
-// system.
-//
-// ============================================================
 
 stock CRP_AdminShowMyUCPBans(playerid)
 {
@@ -1526,20 +3207,7 @@ stock CRP_AdminShowMyUCPBans(playerid)
 
 
 // ============================================================
-// MY BAN ACTION ROUTER
-// ============================================================
-//
-// This public can be called by crp_admin_logs.pwn after a
-// selected record has been chosen.
-//
-// type:
-// ADMIN_MY_BANS_CHARACTER
-// ADMIN_MY_BANS_UCP
-//
-// action:
-// ADMIN_BAN_ACTION_UNBAN
-// ADMIN_BAN_ACTION_UNBLOCK
-//
+// MY BAN ACTION
 // ============================================================
 
 forward CRP_AdminMyBanAction(
@@ -1571,19 +3239,11 @@ public CRP_AdminMyBanAction(
 
     if(action == ADMIN_BAN_ACTION_UNBAN)
     {
-        format(
-            actionname,
-            sizeof(actionname),
-            "Unban"
-        );
+        format(actionname, sizeof(actionname), "Unban");
     }
     else if(action == ADMIN_BAN_ACTION_UNBLOCK)
     {
-        format(
-            actionname,
-            sizeof(actionname),
-            "Unblock"
-        );
+        format(actionname, sizeof(actionname), "Unblock");
     }
     else
     {
@@ -1627,46 +3287,15 @@ stock CRP_AdminConfirmMyBanAction(playerid)
     new type = gSelectedMyBanType[playerid];
     new action = gSelectedMyBanAction[playerid];
 
-    if(type == ADMIN_MY_BANS_CHARACTER)
-    {
-        if(action != ADMIN_BAN_ACTION_UNBAN)
-        {
-            return 0;
-        }
+    CallRemoteFunction(
+        "CRP_AdminLogsExecuteMyBanAction",
+        "iii",
+        playerid,
+        type,
+        action
+    );
 
-        CallRemoteFunction(
-            "CRP_AdminLogsExecuteMyBanAction",
-            "iii",
-            playerid,
-            type,
-            action
-        );
-
-        return 1;
-    }
-
-    if(type == ADMIN_MY_BANS_UCP)
-    {
-        if(
-            action != ADMIN_BAN_ACTION_UNBAN &&
-            action != ADMIN_BAN_ACTION_UNBLOCK
-        )
-        {
-            return 0;
-        }
-
-        CallRemoteFunction(
-            "CRP_AdminLogsExecuteMyBanAction",
-            "iii",
-            playerid,
-            type,
-            action
-        );
-
-        return 1;
-    }
-
-    return 0;
+    return 1;
 }
 
 
@@ -1692,7 +3321,8 @@ stock CRP_AdminShowLogs(playerid)
         Warning\n\
         Mute\n\
         Reports\n\
-        Faction and Families"
+        Faction and Families\n\
+        ASK"
     );
 
     gPlayerAdminPanel[playerid] = ADMIN_PANEL_LOGS;
@@ -1821,11 +3451,6 @@ stock CRP_AdminShowAdminSettings(playerid)
 
 // ============================================================
 // MONEY SETTINGS
-// ============================================================
-//
-// These remain Panel features.
-// They are NOT admin commands.
-//
 // ============================================================
 
 stock CRP_AdminShowMoneySettings(playerid)
@@ -1974,10 +3599,6 @@ stock CRP_AdminShowHouseBusiness(playerid)
 // ============================================================
 // FACTION LIST
 // ============================================================
-//
-// IN / OUT is for the handler themselves.
-//
-// ============================================================
 
 stock CRP_AdminShowFactionList(playerid)
 {
@@ -2066,12 +3687,6 @@ stock CRP_AdminShowFamilyList(playerid)
 // ============================================================
 // HANDLER LIST
 // ============================================================
-//
-// Handler identity is Account Username.
-//
-// It is therefore not cleared on disconnect.
-//
-// ============================================================
 
 stock CRP_AdminShowHandlerList(playerid, division)
 {
@@ -2092,11 +3707,9 @@ stock CRP_AdminShowHandlerList(playerid, division)
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                CRP_AdminIsAccountEmpty(
-                    gFactionFamilyHandlerAccount[i]
-                )
-            )
+            if(CRP_AdminIsAccountEmpty(
+                gFactionFamilyHandlerAccount[i]
+            ))
             {
                 continue;
             }
@@ -2110,21 +3723,16 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 gFactionFamilyHandlerAccount[i]
             );
 
-            strcat(
-                list,
-                line
-            );
+            strcat(list, line);
         }
     }
     else if(division == ADMIN_DIVISION_HOUSE_BUSINESS)
     {
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                CRP_AdminIsAccountEmpty(
-                    gHouseBusinessHandlerAccount[i]
-                )
-            )
+            if(CRP_AdminIsAccountEmpty(
+                gHouseBusinessHandlerAccount[i]
+            ))
             {
                 continue;
             }
@@ -2138,10 +3746,7 @@ stock CRP_AdminShowHandlerList(playerid, division)
                 gHouseBusinessHandlerAccount[i]
             );
 
-            strcat(
-                list,
-                line
-            );
+            strcat(list, line);
         }
     }
 
@@ -2195,11 +3800,6 @@ stock CRP_AdminCanAssignHandler(actorid, targetid)
 // ============================================================
 // ASSIGN FACTION/FAMILY HANDLER
 // ============================================================
-//
-// The account username is stored.
-// Player ID is only used to resolve the target account.
-//
-// ============================================================
 
 stock CRP_AdminSetFactionFamilyHandler(targetid, state)
 {
@@ -2234,11 +3834,9 @@ stock CRP_AdminSetFactionFamilyHandler(targetid, state)
 
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                CRP_AdminIsAccountEmpty(
-                    gFactionFamilyHandlerAccount[i]
-                )
-            )
+            if(CRP_AdminIsAccountEmpty(
+                gFactionFamilyHandlerAccount[i]
+            ))
             {
                 format(
                     gFactionFamilyHandlerAccount[i],
@@ -2303,11 +3901,9 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
         for(new i = 0; i < ADMIN_HANDLER_MAX; i++)
         {
-            if(
-                CRP_AdminIsAccountEmpty(
-                    gHouseBusinessHandlerAccount[i]
-                )
-            )
+            if(CRP_AdminIsAccountEmpty(
+                gHouseBusinessHandlerAccount[i]
+            ))
             {
                 format(
                     gHouseBusinessHandlerAccount[i],
@@ -2333,7 +3929,7 @@ stock CRP_AdminSetHouseBusinessHandler(targetid, state)
 
 
 // ============================================================
-// FACTION IN
+// FACTION IN / OUT
 // ============================================================
 
 stock CRP_AdminFactionIn(playerid, faction)
@@ -2359,18 +3955,12 @@ stock CRP_AdminFactionIn(playerid, faction)
         return 0;
     }
 
-    // Faction and Family are mutually exclusive.
     gPlayerActiveFamily[playerid] = ADMIN_FAMILY_NONE;
-
     gPlayerActiveFaction[playerid] = faction;
 
     return 1;
 }
 
-
-// ============================================================
-// FACTION OUT
-// ============================================================
 
 stock CRP_AdminFactionOut(playerid)
 {
@@ -2386,7 +3976,7 @@ stock CRP_AdminFactionOut(playerid)
 
 
 // ============================================================
-// FAMILY IN
+// FAMILY IN / OUT
 // ============================================================
 
 stock CRP_AdminFamilyIn(playerid, family)
@@ -2412,18 +4002,12 @@ stock CRP_AdminFamilyIn(playerid, family)
         return 0;
     }
 
-    // Faction and Family are mutually exclusive.
     gPlayerActiveFaction[playerid] = ADMIN_FACTION_NONE;
-
     gPlayerActiveFamily[playerid] = family;
 
     return 1;
 }
 
-
-// ============================================================
-// FAMILY OUT
-// ============================================================
 
 stock CRP_AdminFamilyOut(playerid)
 {
@@ -2439,8 +4023,7 @@ stock CRP_AdminFamilyOut(playerid)
 
 
 // ============================================================
-// REMOTE FUNCTION:
-// GET RANK
+// REMOTE FUNCTIONS
 // ============================================================
 
 public CRP_AdminGetRank(playerid)
@@ -2454,32 +4037,17 @@ public CRP_AdminGetRank(playerid)
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// IS STAFF
-// ============================================================
-
 public CRP_AdminIsStaffRemote(playerid)
 {
     return CRP_AdminIsStaff(playerid);
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// IS DEVELOPER
-// ============================================================
-
 public CRP_AdminIsDeveloperRemote(playerid)
 {
     return CRP_AdminIsDeveloper(playerid);
 }
 
-
-// ============================================================
-// REMOTE FUNCTION:
-// TARGET VALIDATION
-// ============================================================
 
 public CRP_AdminCanTargetRemote(actorid, targetid)
 {
@@ -2489,11 +4057,6 @@ public CRP_AdminCanTargetRemote(actorid, targetid)
     );
 }
 
-
-// ============================================================
-// REMOTE FUNCTION:
-// GET DIVISION
-// ============================================================
 
 public CRP_AdminGetDivision(playerid)
 {
@@ -2516,11 +4079,6 @@ public CRP_AdminGetDivision(playerid)
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// GET ACTIVE FACTION
-// ============================================================
-
 public CRP_AdminGetFaction(playerid)
 {
     if(!CRP_AdminIsValidPlayer(playerid))
@@ -2532,11 +4090,6 @@ public CRP_AdminGetFaction(playerid)
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// GET ACTIVE FAMILY
-// ============================================================
-
 public CRP_AdminGetFamily(playerid)
 {
     if(!CRP_AdminIsValidPlayer(playerid))
@@ -2547,11 +4100,6 @@ public CRP_AdminGetFamily(playerid)
     return gPlayerActiveFamily[playerid];
 }
 
-
-// ============================================================
-// REMOTE FUNCTION:
-// GET HANDLER TYPE
-// ============================================================
 
 public CRP_AdminGetHandlerType(playerid)
 {
@@ -2579,11 +4127,6 @@ public CRP_AdminGetHandlerType(playerid)
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// GET ACCOUNT USERNAME
-// ============================================================
-
 public CRP_AdminGetAccountUsername(
     playerid,
     output[],
@@ -2607,19 +4150,6 @@ public CRP_AdminGetAccountUsername(
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// SET RANK
-// ============================================================
-//
-// Rank 10 is blocked here.
-// Developer can only be assigned internally.
-//
-// The actual promotion/demotion validation belongs to
-// crp_admin_cmd.pwn.
-//
-// ============================================================
-
 public CRP_AdminSetRankRemote(playerid, rank)
 {
     if(!CRP_AdminIsValidPlayer(playerid))
@@ -2641,11 +4171,6 @@ public CRP_AdminSetRankRemote(playerid, rank)
 }
 
 
-// ============================================================
-// REMOTE FUNCTION:
-// SET FACTION
-// ============================================================
-
 public CRP_AdminSetFactionRemote(playerid, faction)
 {
     return CRP_AdminFactionIn(
@@ -2654,11 +4179,6 @@ public CRP_AdminSetFactionRemote(playerid, faction)
     );
 }
 
-
-// ============================================================
-// REMOTE FUNCTION:
-// SET FAMILY
-// ============================================================
 
 public CRP_AdminSetFamilyRemote(playerid, family)
 {
@@ -2699,7 +4219,6 @@ public OnDialogResponse(
             {
                 gPlayerAdminPanel[playerid] =
                     ADMIN_PANEL_NONE;
-
                 return 1;
             }
 
@@ -2802,6 +4321,40 @@ public OnDialogResponse(
 
                 return 1;
             }
+
+            case DIALOG_ADMIN_ASKS:
+            {
+                CRP_AdminShowMainPanel(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_ASK_DETAIL:
+            {
+                CRP_AskOpenAdminQueue(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_ASK_ANSWER:
+            {
+                CRP_AskShowQueueDetail(
+                    playerid,
+                    gSelectedAskQueue[playerid]
+                );
+
+                return 1;
+            }
+
+            case DIALOG_ADMIN_ASK_LOGS:
+            {
+                CRP_AdminShowLogs(playerid);
+                return 1;
+            }
+
+            case DIALOG_ADMIN_ASK_LOG_DETAIL:
+            {
+                CRP_AskShowLogs(playerid);
+                return 1;
+            }
         }
 
         return 0;
@@ -2816,10 +4369,6 @@ public OnDialogResponse(
     {
         new index = 0;
 
-        // ----------------------------------------------------
-        // Admin List
-        // ----------------------------------------------------
-
         if(listitem == index)
         {
             CRP_AdminShowList(playerid);
@@ -2827,11 +4376,6 @@ public OnDialogResponse(
         }
 
         index++;
-
-
-        // ----------------------------------------------------
-        // Admin Duty - R2+
-        // ----------------------------------------------------
 
         if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
         {
@@ -2844,11 +4388,6 @@ public OnDialogResponse(
             index++;
         }
 
-
-        // ----------------------------------------------------
-        // Admins
-        // ----------------------------------------------------
-
         if(listitem == index)
         {
             CRP_AdminShowAdmins(playerid);
@@ -2856,11 +4395,6 @@ public OnDialogResponse(
         }
 
         index++;
-
-
-        // ----------------------------------------------------
-        // My Bans - R2+
-        // ----------------------------------------------------
 
         if(gPlayerAdminRank[playerid] >= ADMIN_HELPER)
         {
@@ -2873,11 +4407,6 @@ public OnDialogResponse(
             index++;
         }
 
-
-        // ----------------------------------------------------
-        // Logs
-        // ----------------------------------------------------
-
         if(listitem == index)
         {
             CRP_AdminShowLogs(playerid);
@@ -2886,11 +4415,6 @@ public OnDialogResponse(
 
         index++;
 
-
-        // ----------------------------------------------------
-        // Reports
-        // ----------------------------------------------------
-
         if(listitem == index)
         {
             CRP_AdminShowReportLogs(playerid);
@@ -2898,11 +4422,6 @@ public OnDialogResponse(
         }
 
         index++;
-
-
-        // ----------------------------------------------------
-        // Admin Settings
-        // ----------------------------------------------------
 
         if(CRP_AdminCanAccessAdminSettings(playerid))
         {
@@ -2915,11 +4434,6 @@ public OnDialogResponse(
             index++;
         }
 
-
-        // ----------------------------------------------------
-        // Money Settings
-        // ----------------------------------------------------
-
         if(CRP_AdminCanAccessMoneySettings(playerid))
         {
             if(listitem == index)
@@ -2930,11 +4444,6 @@ public OnDialogResponse(
 
             index++;
         }
-
-
-        // ----------------------------------------------------
-        // Admin Division
-        // ----------------------------------------------------
 
         if(CRP_AdminCanAccessAdminDivision(playerid))
         {
@@ -2986,20 +4495,6 @@ public OnDialogResponse(
     // ========================================================
     // MY BANS ACTION
     // ========================================================
-    //
-    // This dialog is available for future/local rendering
-    // when crp_admin_logs.pwn returns selected record details.
-    //
-    // UCP:
-    // 0 = Unblock
-    // 1 = Unban
-    // 2 = Batal
-    //
-    // Character:
-    // 0 = Unban
-    // 1 = Batal
-    //
-    // ========================================================
 
     if(dialogid == DIALOG_ADMIN_MY_BANS_ACTION)
     {
@@ -3015,8 +4510,6 @@ public OnDialogResponse(
                     ADMIN_MY_BANS_CHARACTER,
                     ADMIN_BAN_ACTION_UNBAN
                 );
-
-                return 1;
             }
 
             return 1;
@@ -3069,20 +4562,6 @@ public OnDialogResponse(
         if(response)
         {
             CRP_AdminConfirmMyBanAction(playerid);
-        }
-        else
-        {
-            if(
-                gSelectedMyBanType[playerid] ==
-                ADMIN_MY_BANS_UCP
-            )
-            {
-                CRP_AdminShowMyUCPBans(playerid);
-            }
-            else
-            {
-                CRP_AdminShowMyCharacterBans(playerid);
-            }
         }
 
         return 1;
@@ -3155,6 +4634,11 @@ public OnDialogResponse(
             case 6:
             {
                 CRP_AdminShowFactionFamilyLogs(playerid);
+            }
+
+            case 7:
+            {
+                CRP_AskShowLogs(playerid);
             }
         }
 
@@ -3465,15 +4949,6 @@ public OnDialogResponse(
     // ========================================================
     // HANDLER LIST
     // ========================================================
-    //
-    // IMPORTANT:
-    // listitem is a row index.
-    // It is NOT a Player ID.
-    //
-    // crp_admin_cmd.pwn must resolve the selected account
-    // from the corresponding handler-account array.
-    //
-    // ========================================================
 
     if(dialogid == DIALOG_ADMIN_HANDLER_LIST)
     {
@@ -3482,7 +4957,8 @@ public OnDialogResponse(
             return 1;
         }
 
-        gSelectedHandlerTarget[playerid] = listitem;
+        gSelectedHandlerTarget[playerid] =
+            listitem;
 
         CallRemoteFunction(
             "CRP_AdminCommandsHandleHandlerSelection",
@@ -3490,6 +4966,162 @@ public OnDialogResponse(
             playerid,
             gSelectedHandlerDivision[playerid],
             listitem
+        );
+
+        return 1;
+    }
+
+
+    // ========================================================
+    // ASK QUEUE
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_ASKS)
+    {
+        if(gPlayerAdminRank[playerid] < ADMIN_INTERN)
+        {
+            return 1;
+        }
+
+        if(listitem < 0)
+        {
+            return 1;
+        }
+
+        new current = -1;
+        new row = 0;
+
+        for(new i = 0; i < gAskQueueCount; i++)
+        {
+            if(gAskQueueStatus[i] != ASK_STATUS_ACTIVE)
+            {
+                continue;
+            }
+
+            if(row == listitem)
+            {
+                current = i;
+                break;
+            }
+
+            row++;
+        }
+
+        if(current == -1)
+        {
+            CRP_AskOpenAdminQueue(playerid);
+            return 1;
+        }
+
+        CRP_AskShowQueueDetail(
+            playerid,
+            current
+        );
+
+        return 1;
+    }
+
+
+    // ========================================================
+    // ASK DETAIL
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_ASK_DETAIL)
+    {
+        if(listitem == 0)
+        {
+            CRP_AskShowAnswerDialog(playerid);
+            return 1;
+        }
+
+        CRP_AskOpenAdminQueue(playerid);
+        return 1;
+    }
+
+
+    // ========================================================
+    // ASK ANSWER
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_ASK_ANSWER)
+    {
+        if(inputtext[0] == EOS)
+        {
+            CRP_AskShowAnswerDialog(playerid);
+            return 1;
+        }
+
+        new index =
+            gSelectedAskQueue[playerid];
+
+        if(
+            index < 0 ||
+            index >= gAskQueueCount
+        )
+        {
+            return 1;
+        }
+
+        if(gAskQueueStatus[index] != ASK_STATUS_ACTIVE)
+        {
+            CRP_AskOpenAdminQueue(playerid);
+            return 1;
+        }
+
+        CRP_AskAnswerQueue(
+            playerid,
+            gAskQueueID[index],
+            inputtext
+        );
+
+        CRP_AskOpenAdminQueue(playerid);
+
+        return 1;
+    }
+
+
+    // ========================================================
+    // ASK LOGS
+    // ========================================================
+
+    if(dialogid == DIALOG_ADMIN_ASK_LOGS)
+    {
+        if(listitem < 0)
+        {
+            return 1;
+        }
+
+        new current = -1;
+        new row = 0;
+
+        for(new i = gAskLogCount - 1; i >= 0; i--)
+        {
+            if(
+                gAskLogStatus[i] != ASK_STATUS_ANSWERED &&
+                gAskLogStatus[i] != ASK_STATUS_EXPIRED
+            )
+            {
+                continue;
+            }
+
+            if(row == listitem)
+            {
+                current = i;
+                break;
+            }
+
+            row++;
+        }
+
+        if(current == -1)
+        {
+            CRP_AskShowLogs(playerid);
+            return 1;
+        }
+
+        CRP_AskShowLogDetail(
+            playerid,
+            current
         );
 
         return 1;
@@ -3548,14 +5180,21 @@ public OnPlayerConnect(playerid)
     gSelectedMyBanAction[playerid] =
         ADMIN_BAN_ACTION_NONE;
 
-    CRP_AdminLoadAccountIdentity(playerid);
+    gSelectedAskQueue[playerid] =
+        -1;
 
-    // IMPORTANT:
-    // Handler assignment is account based.
-    // Do NOT clear handler assignment here.
-    //
-    // Runtime active faction/family is session based and is
-    // reset above.
+    gSelectedAskLog[playerid] =
+        -1;
+
+    gAskMatchCount[playerid] =
+        0;
+
+    for(new i = 0; i < ASK_MATCH_MAX_RESULTS; i++)
+    {
+        gAskMatchLogIndex[playerid][i] = -1;
+    }
+
+    CRP_AdminLoadAccountIdentity(playerid);
 
     return 1;
 }
@@ -3567,11 +5206,23 @@ public OnPlayerConnect(playerid)
 
 public OnPlayerDisconnect(playerid, reason)
 {
-    // Save/update duty runtime before clearing.
     if(gPlayerAdminDuty[playerid])
     {
         gPlayerAdminDutyTotal[playerid] +=
             gettime() - gPlayerAdminDutyStart[playerid];
+    }
+
+    // Active ASK remains stored by player/account data.
+    // The queue itself does NOT disappear simply because the
+    // player disconnects. It will expire normally after 10 min.
+
+    for(new i = 0; i < gAskQueueCount; i++)
+    {
+        if(gAskQueuePlayerID[i] == playerid)
+        {
+            gAskQueuePlayerID[i] =
+                INVALID_PLAYER_ID;
+        }
     }
 
     gPlayerAdminRank[playerid] =
@@ -3616,12 +5267,14 @@ public OnPlayerDisconnect(playerid, reason)
     gSelectedMyBanAction[playerid] =
         ADMIN_BAN_ACTION_NONE;
 
-    // IMPORTANT:
-    //
-    // Handler assignment is NOT cleared.
-    //
-    // It belongs to the account username and must remain
-    // assigned after the player disconnects.
+    gSelectedAskQueue[playerid] =
+        -1;
+
+    gSelectedAskLog[playerid] =
+        -1;
+
+    gAskMatchCount[playerid] =
+        0;
 
     return 1;
 }
@@ -3634,10 +5287,14 @@ public OnPlayerDisconnect(playerid, reason)
 public OnFilterScriptInit()
 {
     print("--------------------------------------------------");
-    print("Crystal Roleplay Admin Panel v3.1");
+    print("Crystal Roleplay Admin Panel v3.2");
     print("Admin Panel System loaded.");
     print("Command system : crp_admin_cmd.pwn");
-    print("Log system     : crp_admin_logs.pwn");
+    print("ASK system     : INTERNAL");
+    print("ASK logs       : INTERNAL");
+    print("ASK queue      : ENABLED");
+    print("ASK expiration : 10 MINUTES");
+    print("ASK Bot        : ENABLED");
     print("Archives       : REMOVED");
     print("My Bans        : ENABLED");
     print("UCP Unban      : ENABLED");
@@ -3645,6 +5302,10 @@ public OnFilterScriptInit()
     print("Admin Division : ENABLED");
     print("Handler Model  : ACCOUNT BASED");
     print("--------------------------------------------------");
+
+    CRP_AskEnsureStorage();
+    CRP_AskLoadCounter();
+    CRP_AskLoadLogs();
 
     return 1;
 }
