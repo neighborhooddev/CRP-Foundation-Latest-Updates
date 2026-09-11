@@ -425,6 +425,8 @@ forward CRP_AdminGetAccountUsername(playerid, output[], size);
 forward CRP_AdminSetRankRemote(playerid, rank);
 forward CRP_AdminSetFactionRemote(playerid, faction);
 forward CRP_AdminSetFamilyRemote(playerid, family);
+forward CRP_AdminIsOnDutyRemote(playerid);
+forward CRP_AdminSetDutyRemote(playerid, state);
 
 
 // ============================================================
@@ -5858,6 +5860,62 @@ public CRP_AdminOpenPanel(playerid)
     );
 }
 
+// ============================================================
+// REMOTE DUTY API
+// ============================================================
+//
+// Command layer:
+// filterscripts/features/admin/crp_admin_cmd.pwn
+//
+// Single source of truth:
+// gPlayerAdminDuty
+// ============================================================
+
+public CRP_AdminIsOnDutyRemote(playerid)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    return gPlayerAdminDuty[playerid];
+}
+
+
+public CRP_AdminSetDutyRemote(playerid, state)
+{
+    if(!CRP_AdminIsValidPlayer(playerid))
+    {
+        return 0;
+    }
+
+    if(state)
+    {
+        if(gPlayerAdminRank[playerid] < ADMIN_HELPER)
+        {
+            return 0;
+        }
+
+        if(!gPlayerAdminDuty[playerid])
+        {
+            gPlayerAdminDuty[playerid] = true;
+            gPlayerAdminDutyStart[playerid] = gettime();
+        }
+
+        return 1;
+    }
+
+    if(gPlayerAdminDuty[playerid])
+    {
+        gPlayerAdminDutyTotal[playerid] +=
+            gettime() - gPlayerAdminDutyStart[playerid];
+
+        gPlayerAdminDutyStart[playerid] = 0;
+        gPlayerAdminDuty[playerid] = false;
+    }
+
+    return 1;
+}
 
 // ============================================================
 // END OF FILE
