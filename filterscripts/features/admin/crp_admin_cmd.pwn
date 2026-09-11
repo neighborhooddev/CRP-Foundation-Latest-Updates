@@ -2,7 +2,7 @@
 
 // ============================================================
 // CRYSTAL ROLEPLAY
-// Admin Commands System v1.3
+// Admin Commands System v1.4
 //
 // File:
 // filterscripts/features/admin/crp_admin_cmd.pwn
@@ -13,36 +13,33 @@
 // Dependency:
 // - crp_admin.pwn
 //
-// ============================================================
-// FOKUS
-// ============================================================
-// - Command dispatcher
-// - Permission / rank validation
-// - Admin duty validation
+// Fokus v1.4:
+// - Admin command dispatcher
+// - Account-based admin identity
+// - Rank validation
+// - Duty validation melalui crp_admin.pwn
 // - Target hierarchy protection
 // - Admin Panel bridge
-// - ASK Panel bridge
+// - ASK Queue bridge
 // - Admin chat
 // - Admin list
-// - Basic player inspection
-// - Basic teleport
-// - Basic vehicle administration
-// - Set Skin
-// - Future command foundation
+// - Vehicle administration
+// - Character administration foundation
 //
-// ============================================================
-// IMPORTANT
-// ============================================================
-// - Admin Rank = ACCOUNT BASED
-// - Duty state = crp_admin.pwn
-// - Hierarchy = crp_admin.pwn
-// - ASK = crp_admin.pwn
-// - Panel = crp_admin.pwn
-// - Tidak ada crp_admin_logs.pwn
-// - Tidak ada Archives
+// ARSITEKTUR:
+// - Admin state / rank / duty / panel / ASK:
+//   crp_admin.pwn
+//
+// - Command layer:
+//   crp_admin_cmd.pwn
+//
+// CATATAN:
 // - Money Settings bukan command
 // - /eject bukan admin command
-//
+// - Tidak menggunakan crp_admin_logs.pwn
+// - Tidak menggunakan Archives
+// - Developer tidak dapat ditargetkan admin lain
+// - Admin dengan rank sama/lebih tinggi tidak dapat ditargetkan
 // ============================================================
 
 
@@ -55,20 +52,22 @@
 #define COLOR_RED               0xE74C3CFF
 #define COLOR_GREEN             0x2ECC71FF
 #define COLOR_YELLOW            0xF1C40FFF
+#define COLOR_ORANGE            0xE67E22FF
 #define COLOR_GOLD              0xD8B56AFF
 #define COLOR_EMERALD           0x09261FFF
 
 
 // ============================================================
 // ADMIN RANK
-// Sinkron dengan crp_admin.pwn
+//
+// Harus sinkron dengan crp_admin.pwn
 // ============================================================
 
 #define ADMIN_NO_STAFF          0
 #define ADMIN_INTERN            1
 #define ADMIN_HELPER            2
 #define ADMIN_SENIOR_HELPER     3
-#define ADMIN_ADMIN             4
+#define ADMIN_ADMIN              4
 #define ADMIN_SENIOR_ADMIN      5
 #define ADMIN_SUPERVISOR        6
 #define ADMIN_HIGH_ADMIN        7
@@ -78,15 +77,56 @@
 
 
 // ============================================================
-// COMMAND BUFFER
+// COMMAND RESULT
 // ============================================================
 
-#define CRP_CMD_NAME_LENGTH     32
-#define CRP_CMD_PARAMS_LENGTH   256
+#define ADMIN_CMD_FAIL          0
+#define ADMIN_CMD_OK            1
+
+
+// ============================================================
+// VEHICLE
+// ============================================================
+
+#define INVALID_VEHICLE_ID      0
+
+
+// ============================================================
+// FORWARDS
+// ============================================================
+
+forward CRP_AdminCommand_AP(playerid);
+forward CRP_AdminCommand_Asks(playerid);
+forward CRP_AdminCommand_A(playerid, const params[]);
+forward CRP_AdminCommand_Admins(playerid);
+forward CRP_AdminCommand_AOn(playerid);
+forward CRP_AdminCommand_AOff(playerid);
+
+forward CRP_AdminCommand_Check(playerid, const params[]);
+forward CRP_AdminCommand_AInspect(playerid, const params[]);
+forward CRP_AdminCommand_Goto(playerid, const params[]);
+forward CRP_AdminCommand_GetHere(playerid, const params[]);
+
+forward CRP_AdminCommand_Flip(playerid, const params[]);
+forward CRP_AdminCommand_AFriSK(playerid, const params[]);
+forward CRP_AdminCommand_CheckMask(playerid, const params[]);
+
+forward CRP_AdminCommand_FixVeh(playerid, const params[]);
+forward CRP_AdminCommand_RespawnCar(playerid, const params[]);
+forward CRP_AdminCommand_DestroyCar(playerid, const params[]);
+forward CRP_AdminCommand_RespawnAllCars(playerid);
+forward CRP_AdminCommand_AFill(playerid, const params[]);
+
+forward CRP_AdminCommand_SetSkin(playerid, const params[]);
+forward CRP_AdminCommand_CharRemove(playerid, const params[]);
+
+forward CRP_AdminCommand_AHelp(playerid);
 
 
 // ============================================================
 // REMOTE ADMIN API
+//
+// Semua state admin berasal dari crp_admin.pwn.
 // ============================================================
 
 stock CRP_AdminGetRank(playerid)
@@ -130,11 +170,47 @@ stock bool:CRP_AdminCanTarget(playerid, targetid)
 }
 
 
-stock CRP_AdminGetAccountUsername(
-    playerid,
-    output[],
-    size = 64
-)
+stock CRP_AdminGetFaction(playerid)
+{
+    return CallRemoteFunction(
+        "CRP_AdminGetFaction",
+        "i",
+        playerid
+    );
+}
+
+
+stock CRP_AdminGetFamily(playerid)
+{
+    return CallRemoteFunction(
+        "CRP_AdminGetFamily",
+        "i",
+        playerid
+    );
+}
+
+
+stock CRP_AdminGetDivision(playerid)
+{
+    return CallRemoteFunction(
+        "CRP_AdminGetDivision",
+        "i",
+        playerid
+    );
+}
+
+
+stock CRP_AdminGetHandlerType(playerid)
+{
+    return CallRemoteFunction(
+        "CRP_AdminGetHandlerType",
+        "i",
+        playerid
+    );
+}
+
+
+stock CRP_AdminGetAccountUsername(playerid, output[], size = 64)
 {
     output[0] = EOS;
 
@@ -151,8 +227,9 @@ stock CRP_AdminGetAccountUsername(
 
 
 // ============================================================
-// DUTY API
-// Source of truth:
+// ADMIN DUTY
+//
+// Single source of truth:
 // crp_admin.pwn
 // ============================================================
 
@@ -166,10 +243,7 @@ stock bool:CRP_AdminIsOnDuty(playerid)
 }
 
 
-stock CRP_AdminSetDuty(
-    playerid,
-    bool:state
-)
+stock CRP_AdminSetDuty(playerid, bool:state)
 {
     return CallRemoteFunction(
         "CRP_AdminSetDutyRemote",
@@ -184,15 +258,10 @@ stock CRP_AdminSetDuty(
 // BASIC VALIDATION
 // ============================================================
 
-stock bool:CRP_AdminRequireStaff(
-    playerid,
-    minimum_rank
-)
+stock bool:CRP_AdminRequireStaff(playerid, minimum_rank)
 {
     if(!IsPlayerConnected(playerid))
-    {
         return false;
-    }
 
     if(!CRP_AdminIsStaff(playerid))
     {
@@ -222,18 +291,10 @@ stock bool:CRP_AdminRequireStaff(
 }
 
 
-stock bool:CRP_AdminRequireDuty(
-    playerid,
-    minimum_rank
-)
+stock bool:CRP_AdminRequireDuty(playerid, minimum_rank)
 {
-    if(!CRP_AdminRequireStaff(
-        playerid,
-        minimum_rank
-    ))
-    {
+    if(!CRP_AdminRequireStaff(playerid, minimum_rank))
         return false;
-    }
 
     if(!CRP_AdminIsOnDuty(playerid))
     {
@@ -250,21 +311,15 @@ stock bool:CRP_AdminRequireDuty(
 }
 
 
-stock bool:CRP_AdminRequireTarget(
-    playerid,
-    targetid
-)
+stock bool:CRP_AdminRequireTarget(playerid, targetid)
 {
-    if(
-        targetid < 0 ||
-        targetid >= MAX_PLAYERS ||
-        !IsPlayerConnected(targetid)
-    )
+    if(targetid == INVALID_PLAYER_ID ||
+       !IsPlayerConnected(targetid))
     {
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Player tidak ditemukan."
+            "AdminCmd: Player tersebut tidak ditemukan atau sudah offline."
         );
 
         return false;
@@ -275,21 +330,18 @@ stock bool:CRP_AdminRequireTarget(
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Kamu tidak dapat menargetkan diri sendiri."
+            "AdminCmd: Kamu tidak dapat menggunakan command ini kepada diri sendiri."
         );
 
         return false;
     }
 
-    if(!CRP_AdminCanTarget(
-        playerid,
-        targetid
-    ))
+    if(!CRP_AdminCanTarget(playerid, targetid))
     {
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Target memiliki rank yang sama atau lebih tinggi."
+            "AdminCmd: Kamu tidak dapat menargetkan admin dengan rank yang sama atau lebih tinggi."
         );
 
         return false;
@@ -303,24 +355,15 @@ stock bool:CRP_AdminRequireTarget(
 // STRING UTILITIES
 // ============================================================
 
-stock bool:CRP_IsNumeric(
-    const text[]
-)
+stock bool:CRP_IsNumeric(const text[])
 {
     if(!strlen(text))
-    {
         return false;
-    }
 
     for(new i = 0; text[i] != EOS; i++)
     {
-        if(
-            text[i] < '0' ||
-            text[i] > '9'
-        )
-        {
+        if(text[i] < '0' || text[i] > '9')
             return false;
-        }
     }
 
     return true;
@@ -335,37 +378,30 @@ stock CRP_AdminGetToken(
 )
 {
     new current = 0;
-    new start = 0;
+    new position = 0;
     new length = strlen(source);
 
     output[0] = EOS;
 
     for(new i = 0; i <= length; i++)
     {
-        if(
-            source[i] == ' ' ||
-            source[i] == EOS
-        )
+        if(source[i] == ' ' || source[i] == EOS)
         {
             if(current == index)
             {
-                new tokenLength = i - start;
+                new tokenLength = i - position;
 
                 if(tokenLength >= size)
-                {
                     tokenLength = size - 1;
-                }
 
-                if(tokenLength <= 0)
-                {
-                    return 0;
-                }
+                if(tokenLength < 0)
+                    tokenLength = 0;
 
                 strmid(
                     output,
                     source,
-                    start,
-                    start + tokenLength,
+                    position,
+                    position + tokenLength,
                     size
                 );
 
@@ -374,14 +410,56 @@ stock CRP_AdminGetToken(
 
             current++;
 
-            while(
-                source[i + 1] == ' '
-            )
-            {
+            while(source[i + 1] == ' ')
                 i++;
+
+            position = i + 1;
+        }
+    }
+
+    return 0;
+}
+
+
+stock CRP_AdminGetRest(
+    const source[],
+    startIndex,
+    output[],
+    size
+)
+{
+    new current = 0;
+    new position = 0;
+    new length = strlen(source);
+
+    output[0] = EOS;
+
+    for(new i = 0; i <= length; i++)
+    {
+        if(source[i] == ' ' || source[i] == EOS)
+        {
+            if(current == startIndex)
+            {
+                while(source[position] == ' ')
+                    position++;
+
+                strmid(
+                    output,
+                    source,
+                    position,
+                    length,
+                    size
+                );
+
+                return 1;
             }
 
-            start = i + 1;
+            current++;
+
+            while(source[i + 1] == ' ')
+                i++;
+
+            position = i + 1;
         }
     }
 
@@ -391,54 +469,48 @@ stock CRP_AdminGetToken(
 
 // ============================================================
 // PLAYER FINDER
+//
+// Support:
+// - Player ID
+// - Exact player name
 // ============================================================
 
-stock CRP_AdminFindPlayer(
-    const input[]
-)
+stock CRP_AdminFindPlayer(const input[])
 {
     if(!strlen(input))
-    {
         return INVALID_PLAYER_ID;
-    }
+
+    new targetid;
 
     if(CRP_IsNumeric(input))
     {
-        new id = strval(input);
+        targetid = strval(input);
 
         if(
-            id >= 0 &&
-            id < MAX_PLAYERS &&
-            IsPlayerConnected(id)
+            targetid >= 0 &&
+            targetid < MAX_PLAYERS &&
+            IsPlayerConnected(targetid)
         )
         {
-            return id;
+            return targetid;
         }
     }
 
-    new name[MAX_PLAYER_NAME + 1];
+    new playerName[MAX_PLAYER_NAME + 1];
 
-    for(new i = 0; i < MAX_PLAYERS; i++)
+    for(new playerid = 0; playerid < MAX_PLAYERS; playerid++)
     {
-        if(!IsPlayerConnected(i))
-        {
+        if(!IsPlayerConnected(playerid))
             continue;
-        }
 
         GetPlayerName(
-            i,
-            name,
-            sizeof(name)
+            playerid,
+            playerName,
+            sizeof(playerName)
         );
 
-        if(!strcmp(
-            name,
-            input,
-            true
-        ))
-        {
-            return i;
-        }
+        if(!strcmp(playerName, input, true))
+            return playerid;
     }
 
     return INVALID_PLAYER_ID;
@@ -446,13 +518,59 @@ stock CRP_AdminFindPlayer(
 
 
 // ============================================================
+// VEHICLE FINDER
+//
+// Support:
+// - Vehicle ID
+// - Vehicle yang sedang dikendarai admin
+// ============================================================
+
+stock CRP_AdminFindVehicle(playerid, const params[])
+{
+    new token[32];
+
+    if(CRP_AdminGetToken(
+        params,
+        0,
+        token,
+        sizeof(token)
+    ))
+    {
+        if(CRP_IsNumeric(token))
+        {
+            new vehicleid = strval(token);
+
+            if(
+                vehicleid > 0 &&
+                vehicleid < MAX_VEHICLES &&
+                IsValidVehicle(vehicleid)
+            )
+            {
+                return vehicleid;
+            }
+        }
+    }
+
+    if(IsPlayerInAnyVehicle(playerid))
+    {
+        new vehicleid = GetPlayerVehicleID(playerid);
+
+        if(vehicleid > 0 && IsValidVehicle(vehicleid))
+            return vehicleid;
+    }
+
+    return INVALID_VEHICLE_ID;
+}
+
+
+// ============================================================
 // /AP
+//
+// Permission:
 // R1+
 // ============================================================
 
-stock CRP_AdminCommand_AP(
-    playerid
-)
+stock CRP_AdminCommand_AP(playerid)
 {
     if(!CRP_AdminRequireStaff(
         playerid,
@@ -474,12 +592,14 @@ stock CRP_AdminCommand_AP(
 
 // ============================================================
 // /ASKS
+//
+// Permission:
 // R1+
+//
+// ASK Queue dimiliki crp_admin.pwn.
 // ============================================================
 
-stock CRP_AdminCommand_Asks(
-    playerid
-)
+stock CRP_AdminCommand_Asks(playerid)
 {
     if(!CRP_AdminRequireStaff(
         playerid,
@@ -501,6 +621,8 @@ stock CRP_AdminCommand_Asks(
 
 // ============================================================
 // /A
+//
+// Permission:
 // R1+
 // ============================================================
 
@@ -549,14 +671,10 @@ stock CRP_AdminCommand_A(
     for(new i = 0; i < MAX_PLAYERS; i++)
     {
         if(!IsPlayerConnected(i))
-        {
             continue;
-        }
 
         if(!CRP_AdminIsStaff(i))
-        {
             continue;
-        }
 
         SendClientMessage(
             i,
@@ -571,12 +689,12 @@ stock CRP_AdminCommand_A(
 
 // ============================================================
 // /ADMINS
+//
+// Permission:
 // R1+
 // ============================================================
 
-stock CRP_AdminCommand_Admins(
-    playerid
-)
+stock CRP_AdminCommand_Admins(playerid)
 {
     if(!CRP_AdminRequireStaff(
         playerid,
@@ -589,25 +707,20 @@ stock CRP_AdminCommand_Admins(
     SendClientMessage(
         playerid,
         COLOR_GOLD,
-        "========== ONLINE ADMIN STAFF =========="
+        "========== CRYSTAL ROLEPLAY ADMIN STAFF =========="
     );
 
     new name[MAX_PLAYER_NAME + 1];
     new username[64];
-    new rankName[64];
     new line[192];
 
     for(new i = 0; i < MAX_PLAYERS; i++)
     {
         if(!IsPlayerConnected(i))
-        {
             continue;
-        }
 
         if(!CRP_AdminIsStaff(i))
-        {
             continue;
-        }
 
         GetPlayerName(
             i,
@@ -623,49 +736,13 @@ stock CRP_AdminCommand_Admins(
 
         new rank = CRP_AdminGetRank(i);
 
-        switch(rank)
-        {
-            case ADMIN_DEVELOPER:
-                format(rankName, sizeof(rankName), "Developer");
-
-            case ADMIN_SERVER_DIRECTOR:
-                format(rankName, sizeof(rankName), "Server Director");
-
-            case ADMIN_ADMIN_DIRECTOR:
-                format(rankName, sizeof(rankName), "Admin Director");
-
-            case ADMIN_HIGH_ADMIN:
-                format(rankName, sizeof(rankName), "High Admin");
-
-            case ADMIN_SUPERVISOR:
-                format(rankName, sizeof(rankName), "Supervisor Admin");
-
-            case ADMIN_SENIOR_ADMIN:
-                format(rankName, sizeof(rankName), "Senior Admin");
-
-            case ADMIN_ADMIN:
-                format(rankName, sizeof(rankName), "Admin");
-
-            case ADMIN_SENIOR_HELPER:
-                format(rankName, sizeof(rankName), "Senior Helper");
-
-            case ADMIN_HELPER:
-                format(rankName, sizeof(rankName), "Helper");
-
-            case ADMIN_INTERN:
-                format(rankName, sizeof(rankName), "Intern Staff");
-
-            default:
-                format(rankName, sizeof(rankName), "No Staff");
-        }
-
         format(
             line,
             sizeof(line),
-            "%s | %s | %s | %s",
+            "%s | Account: %s | R%d | %s",
             name,
             username,
-            rankName,
+            rank,
             CRP_AdminIsOnDuty(i)
                 ? ("ON DUTY")
                 : ("OFF DUTY")
@@ -681,7 +758,7 @@ stock CRP_AdminCommand_Admins(
     SendClientMessage(
         playerid,
         COLOR_GOLD,
-        "========================================"
+        "================================================="
     );
 
     return 1;
@@ -690,12 +767,12 @@ stock CRP_AdminCommand_Admins(
 
 // ============================================================
 // /AON
+//
+// Permission:
 // R2+
 // ============================================================
 
-stock CRP_AdminCommand_AOn(
-    playerid
-)
+stock CRP_AdminCommand_AOn(playerid)
 {
     if(!CRP_AdminRequireStaff(
         playerid,
@@ -724,7 +801,7 @@ stock CRP_AdminCommand_AOn(
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Gagal mengaktifkan Admin Duty."
+            "AdminCmd: Admin Duty gagal diaktifkan."
         );
 
         return 1;
@@ -742,12 +819,12 @@ stock CRP_AdminCommand_AOn(
 
 // ============================================================
 // /AOFF
+//
+// Permission:
 // R2+
 // ============================================================
 
-stock CRP_AdminCommand_AOff(
-    playerid
-)
+stock CRP_AdminCommand_AOff(playerid)
 {
     if(!CRP_AdminRequireStaff(
         playerid,
@@ -776,7 +853,7 @@ stock CRP_AdminCommand_AOff(
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Gagal menonaktifkan Admin Duty."
+            "AdminCmd: Admin Duty gagal dinonaktifkan."
         );
 
         return 1;
@@ -794,6 +871,8 @@ stock CRP_AdminCommand_AOff(
 
 // ============================================================
 // /CHECK
+//
+// Permission:
 // R2+
 // ============================================================
 
@@ -828,8 +907,7 @@ stock CRP_AdminCommand_Check(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -839,126 +917,11 @@ stock CRP_AdminCommand_Check(
         return 1;
     }
 
-    new name[MAX_PLAYER_NAME + 1];
-    new account[64];
-    new Float:health;
-    new Float:armor;
-    new Float:x;
-    new Float:y;
-    new Float:z;
-
-    GetPlayerName(
-        targetid,
-        name,
-        sizeof(name)
-    );
-
-    CRP_AdminGetAccountUsername(
-        targetid,
-        account,
-        sizeof(account)
-    );
-
-    GetPlayerHealth(
-        targetid,
-        health
-    );
-
-    GetPlayerArmour(
-        targetid,
-        armor
-    );
-
-    GetPlayerPos(
-        targetid,
-        x,
-        y,
-        z
-    );
-
-    SendClientMessage(
+    CallRemoteFunction(
+        "CRP_AdminCommandCheck",
+        "ii",
         playerid,
-        COLOR_GOLD,
-        "========== PLAYER CHECK =========="
-    );
-
-    new line[192];
-
-    format(
-        line,
-        sizeof(line),
-        "ID: %d | Name: %s",
-        targetid,
-        name
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Account: %s | Rank: R%d",
-        account,
-        CRP_AdminGetRank(targetid)
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Health: %.1f | Armour: %.1f",
-        health,
-        armor
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Interior: %d | Virtual World: %d",
-        GetPlayerInterior(targetid),
-        GetPlayerVirtualWorld(targetid)
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Position: %.2f, %.2f, %.2f",
-        x,
-        y,
-        z
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GOLD,
-        "=================================="
+        targetid
     );
 
     return 1;
@@ -967,6 +930,8 @@ stock CRP_AdminCommand_Check(
 
 // ============================================================
 // /AINSPECT
+//
+// Permission:
 // R2+
 // ============================================================
 
@@ -1001,8 +966,7 @@ stock CRP_AdminCommand_AInspect(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1012,83 +976,11 @@ stock CRP_AdminCommand_AInspect(
         return 1;
     }
 
-    new name[MAX_PLAYER_NAME + 1];
-    new account[64];
-    new ip[16];
-
-    GetPlayerName(
-        targetid,
-        name,
-        sizeof(name)
-    );
-
-    CRP_AdminGetAccountUsername(
-        targetid,
-        account,
-        sizeof(account)
-    );
-
-    GetPlayerIp(
-        targetid,
-        ip,
-        sizeof(ip)
-    );
-
-    SendClientMessage(
+    CallRemoteFunction(
+        "CRP_AdminCommandAInspect",
+        "ii",
         playerid,
-        COLOR_GOLD,
-        "========== ADMIN INSPECT =========="
-    );
-
-    new line[192];
-
-    format(
-        line,
-        sizeof(line),
-        "Player: %s | ID: %d",
-        name,
         targetid
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Account: %s | IP: %s",
-        account,
-        ip
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    format(
-        line,
-        sizeof(line),
-        "Ping: %d | Interior: %d | VW: %d",
-        GetPlayerPing(targetid),
-        GetPlayerInterior(targetid),
-        GetPlayerVirtualWorld(targetid)
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GOLD,
-        "=================================="
     );
 
     return 1;
@@ -1097,6 +989,8 @@ stock CRP_AdminCommand_AInspect(
 
 // ============================================================
 // /GOTO
+//
+// Permission:
 // R2+
 // ============================================================
 
@@ -1131,8 +1025,7 @@ stock CRP_AdminCommand_Goto(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1145,6 +1038,8 @@ stock CRP_AdminCommand_Goto(
     new Float:x;
     new Float:y;
     new Float:z;
+    new interior;
+    new world;
 
     GetPlayerPos(
         targetid,
@@ -1153,14 +1048,17 @@ stock CRP_AdminCommand_Goto(
         z
     );
 
+    interior = GetPlayerInterior(targetid);
+    world = GetPlayerVirtualWorld(targetid);
+
     SetPlayerInterior(
         playerid,
-        GetPlayerInterior(targetid)
+        interior
     );
 
     SetPlayerVirtualWorld(
         playerid,
-        GetPlayerVirtualWorld(targetid)
+        world
     );
 
     SetPlayerPos(
@@ -1173,7 +1071,7 @@ stock CRP_AdminCommand_Goto(
     SendClientMessage(
         playerid,
         COLOR_GREEN,
-        "AdminCmd: Kamu telah teleport ke player."
+        "AdminCmd: Kamu telah teleport ke player tersebut."
     );
 
     return 1;
@@ -1182,6 +1080,8 @@ stock CRP_AdminCommand_Goto(
 
 // ============================================================
 // /GETHERE
+//
+// Permission:
 // R2+
 // ============================================================
 
@@ -1216,8 +1116,7 @@ stock CRP_AdminCommand_GetHere(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1230,6 +1129,8 @@ stock CRP_AdminCommand_GetHere(
     new Float:x;
     new Float:y;
     new Float:z;
+    new interior;
+    new world;
 
     GetPlayerPos(
         playerid,
@@ -1238,14 +1139,17 @@ stock CRP_AdminCommand_GetHere(
         z
     );
 
+    interior = GetPlayerInterior(playerid);
+    world = GetPlayerVirtualWorld(playerid);
+
     SetPlayerInterior(
         targetid,
-        GetPlayerInterior(playerid)
+        interior
     );
 
     SetPlayerVirtualWorld(
         targetid,
-        GetPlayerVirtualWorld(playerid)
+        world
     );
 
     SetPlayerPos(
@@ -1258,13 +1162,13 @@ stock CRP_AdminCommand_GetHere(
     SendClientMessage(
         playerid,
         COLOR_GREEN,
-        "AdminCmd: Player telah dipindahkan ke lokasi kamu."
+        "AdminCmd: Player berhasil dipindahkan ke posisi kamu."
     );
 
     SendClientMessage(
         targetid,
         COLOR_YELLOW,
-        "AdminCmd: Kamu telah dipindahkan oleh Admin."
+        "AdminCmd: Kamu telah dipindahkan oleh admin."
     );
 
     return 1;
@@ -1273,11 +1177,14 @@ stock CRP_AdminCommand_GetHere(
 
 // ============================================================
 // /FLIP
+//
+// Permission:
 // R2+
 // ============================================================
 
 stock CRP_AdminCommand_Flip(
-    playerid
+    playerid,
+    const params[]
 )
 {
     if(!CRP_AdminRequireDuty(
@@ -1288,15 +1195,17 @@ stock CRP_AdminCommand_Flip(
         return 1;
     }
 
-    new vehicleid =
-        GetPlayerVehicleID(playerid);
+    new vehicleid = CRP_AdminFindVehicle(
+        playerid,
+        params
+    );
 
-    if(!vehicleid)
+    if(vehicleid == INVALID_VEHICLE_ID)
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "AdminCmd: Kamu harus berada di dalam kendaraan."
+            "USAGE: /flip [vehicleid] - kosongkan ID jika sedang berada di kendaraan."
         );
 
         return 1;
@@ -1305,12 +1214,18 @@ stock CRP_AdminCommand_Flip(
     new Float:x;
     new Float:y;
     new Float:z;
+    new Float:angle;
 
     GetVehiclePos(
         vehicleid,
         x,
         y,
         z
+    );
+
+    GetVehicleZAngle(
+        vehicleid,
+        angle
     );
 
     SetVehiclePos(
@@ -1322,7 +1237,7 @@ stock CRP_AdminCommand_Flip(
 
     SetVehicleZAngle(
         vehicleid,
-        0.0
+        angle
     );
 
     SendClientMessage(
@@ -1337,10 +1252,15 @@ stock CRP_AdminCommand_Flip(
 
 // ============================================================
 // /AFRISK
+//
+// Permission:
 // R2+
+//
+// Foundation-safe:
+// Sistem inventory belum menjadi dependency command layer.
 // ============================================================
 
-stock CRP_AdminCommand_AFrisk(
+stock CRP_AdminCommand_AFriSK(
     playerid,
     const params[]
 )
@@ -1371,8 +1291,7 @@ stock CRP_AdminCommand_AFrisk(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1382,46 +1301,16 @@ stock CRP_AdminCommand_AFrisk(
         return 1;
     }
 
-    new name[MAX_PLAYER_NAME + 1];
-
-    GetPlayerName(
-        targetid,
-        name,
-        sizeof(name)
-    );
-
     SendClientMessage(
         playerid,
-        COLOR_GOLD,
-        "========== ADMIN FRISK =========="
-    );
-
-    new line[160];
-
-    format(
-        line,
-        sizeof(line),
-        "Target: %s (%d)",
-        name,
-        targetid
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_WHITE,
-        line
+        COLOR_YELLOW,
+        "AdminCmd: Inventory/character backend belum terhubung ke Admin Foundation."
     );
 
     SendClientMessage(
         playerid,
         COLOR_GREY,
-        "Inventory/storage frisk belum terhubung."
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GOLD,
-        "================================="
+        "AdminCmd: /afrisk sudah memiliki permission R2+ dan siap menerima backend inventory."
     );
 
     return 1;
@@ -1430,6 +1319,8 @@ stock CRP_AdminCommand_AFrisk(
 
 // ============================================================
 // /CHECKMASK
+//
+// Permission:
 // R2+
 // ============================================================
 
@@ -1464,8 +1355,7 @@ stock CRP_AdminCommand_CheckMask(
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(token);
+    new targetid = CRP_AdminFindPlayer(token);
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1477,20 +1367,14 @@ stock CRP_AdminCommand_CheckMask(
 
     SendClientMessage(
         playerid,
-        COLOR_GOLD,
-        "========== CHECK MASK =========="
+        COLOR_YELLOW,
+        "AdminCmd: Character/mask backend belum terhubung ke Admin Foundation."
     );
 
     SendClientMessage(
         playerid,
         COLOR_GREY,
-        "Character mask system belum terhubung."
-    );
-
-    SendClientMessage(
-        playerid,
-        COLOR_GOLD,
-        "================================"
+        "AdminCmd: /checkmask sudah memiliki permission R2+ dan siap menerima backend character."
     );
 
     return 1;
@@ -1499,38 +1383,41 @@ stock CRP_AdminCommand_CheckMask(
 
 // ============================================================
 // /FIXVEH
+//
+// Permission:
 // R3+
 // ============================================================
 
 stock CRP_AdminCommand_FixVeh(
-    playerid
+    playerid,
+    const params[]
 )
 {
     if(!CRP_AdminRequireDuty(
         playerid,
-        ADMIN_ADMIN
+        ADMIN_SENIOR_HELPER
     ))
     {
         return 1;
     }
 
-    new vehicleid =
-        GetPlayerVehicleID(playerid);
+    new vehicleid = CRP_AdminFindVehicle(
+        playerid,
+        params
+    );
 
-    if(!vehicleid)
+    if(vehicleid == INVALID_VEHICLE_ID)
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "AdminCmd: Kamu harus berada di dalam kendaraan."
+            "USAGE: /fixveh [vehicleid] - kosongkan ID jika sedang berada di kendaraan."
         );
 
         return 1;
     }
 
-    RepairVehicle(
-        vehicleid
-    );
+    RepairVehicle(vehicleid);
 
     SendClientMessage(
         playerid,
@@ -1544,38 +1431,41 @@ stock CRP_AdminCommand_FixVeh(
 
 // ============================================================
 // /RESPAWNCAR
+//
+// Permission:
 // R3+
 // ============================================================
 
 stock CRP_AdminCommand_RespawnCar(
-    playerid
+    playerid,
+    const params[]
 )
 {
     if(!CRP_AdminRequireDuty(
         playerid,
-        ADMIN_ADMIN
+        ADMIN_SENIOR_HELPER
     ))
     {
         return 1;
     }
 
-    new vehicleid =
-        GetPlayerVehicleID(playerid);
+    new vehicleid = CRP_AdminFindVehicle(
+        playerid,
+        params
+    );
 
-    if(!vehicleid)
+    if(vehicleid == INVALID_VEHICLE_ID)
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "AdminCmd: Kamu harus berada di dalam kendaraan."
+            "USAGE: /respawncar [vehicleid] - kosongkan ID jika sedang berada di kendaraan."
         );
 
         return 1;
     }
 
-    SetVehicleToRespawn(
-        vehicleid
-    );
+    SetVehicleToRespawn(vehicleid);
 
     SendClientMessage(
         playerid,
@@ -1589,47 +1479,54 @@ stock CRP_AdminCommand_RespawnCar(
 
 // ============================================================
 // /DESTROYCAR
+//
+// Permission:
 // R3+
 // ============================================================
 
 stock CRP_AdminCommand_DestroyCar(
-    playerid
+    playerid,
+    const params[]
 )
 {
     if(!CRP_AdminRequireDuty(
         playerid,
-        ADMIN_ADMIN
+        ADMIN_SENIOR_HELPER
     ))
     {
         return 1;
     }
 
-    new vehicleid =
-        GetPlayerVehicleID(playerid);
+    new vehicleid = CRP_AdminFindVehicle(
+        playerid,
+        params
+    );
 
-    if(!vehicleid)
+    if(vehicleid == INVALID_VEHICLE_ID)
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "AdminCmd: Kamu harus berada di dalam kendaraan."
+            "USAGE: /destroycar [vehicleid] - kosongkan ID jika sedang berada di kendaraan."
         );
 
         return 1;
     }
 
-    RemovePlayerFromVehicle(
-        playerid
-    );
-
-    DestroyVehicle(
+    if(IsPlayerInVehicle(
+        playerid,
         vehicleid
-    );
+    ))
+    {
+        RemovePlayerFromVehicle(playerid);
+    }
+
+    DestroyVehicle(vehicleid);
 
     SendClientMessage(
         playerid,
         COLOR_GREEN,
-        "AdminCmd: Kendaraan berhasil dihancurkan."
+        "AdminCmd: Kendaraan berhasil dihapus dari server."
     );
 
     return 1;
@@ -1638,34 +1535,33 @@ stock CRP_AdminCommand_DestroyCar(
 
 // ============================================================
 // /RESPAWNALLCARS
+//
+// Permission:
 // R3+
 // ============================================================
 
-stock CRP_AdminCommand_RespawnAllCars(
-    playerid
-)
+stock CRP_AdminCommand_RespawnAllCars(playerid)
 {
     if(!CRP_AdminRequireDuty(
         playerid,
-        ADMIN_ADMIN
+        ADMIN_SENIOR_HELPER
     ))
     {
         return 1;
     }
 
-    for(new vehicleid = 1;
-        vehicleid <= MAX_VEHICLES;
-        vehicleid++)
+    for(new vehicleid = 1; vehicleid < MAX_VEHICLES; vehicleid++)
     {
-        SetVehicleToRespawn(
-            vehicleid
-        );
+        if(!IsValidVehicle(vehicleid))
+            continue;
+
+        SetVehicleToRespawn(vehicleid);
     }
 
     SendClientMessage(
         playerid,
         COLOR_GREEN,
-        "AdminCmd: Seluruh kendaraan berhasil di-respawn."
+        "AdminCmd: Seluruh kendaraan valid berhasil di-respawn."
     );
 
     return 1;
@@ -1674,54 +1570,54 @@ stock CRP_AdminCommand_RespawnAllCars(
 
 // ============================================================
 // /AFILL
-// R3+
-// ============================================================
 //
-// Foundation note:
-// Sistem fuel belum tersedia.
-// Untuk sementara command hanya melakukan vehicle repair.
+// Permission:
+// R3+
+//
+// IMPORTANT:
+// Fuel system belum menjadi dependency Admin Foundation.
+// Jangan mengarang perubahan fuel lokal di sini.
 // ============================================================
 
 stock CRP_AdminCommand_AFill(
-    playerid
+    playerid,
+    const params[]
 )
 {
     if(!CRP_AdminRequireDuty(
         playerid,
-        ADMIN_ADMIN
+        ADMIN_SENIOR_HELPER
     ))
     {
         return 1;
     }
 
-    new vehicleid =
-        GetPlayerVehicleID(playerid);
+    new vehicleid = CRP_AdminFindVehicle(
+        playerid,
+        params
+    );
 
-    if(!vehicleid)
+    if(vehicleid == INVALID_VEHICLE_ID)
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "AdminCmd: Kamu harus berada di dalam kendaraan."
+            "USAGE: /afill [vehicleid] - kosongkan ID jika sedang berada di kendaraan."
         );
 
         return 1;
     }
 
-    RepairVehicle(
-        vehicleid
-    );
-
     SendClientMessage(
         playerid,
-        COLOR_GREEN,
-        "AdminCmd: Kendaraan berhasil diisi/diperbaiki."
+        COLOR_YELLOW,
+        "AdminCmd: Fuel backend belum terhubung ke Admin Foundation."
     );
 
     SendClientMessage(
         playerid,
         COLOR_GREY,
-        "Catatan: Fuel backend belum terhubung ke foundation."
+        "AdminCmd: /afill sudah tersedia dengan permission R3+."
     );
 
     return 1;
@@ -1730,6 +1626,8 @@ stock CRP_AdminCommand_AFill(
 
 // ============================================================
 // /SETSKIN
+//
+// Permission:
 // R4+
 // ============================================================
 
@@ -1749,32 +1647,31 @@ stock CRP_AdminCommand_SetSkin(
     new targetToken[32];
     new skinToken[32];
 
-    if(
-        !CRP_AdminGetToken(
-            params,
-            0,
-            targetToken,
-            sizeof(targetToken)
-        ) ||
-        !CRP_AdminGetToken(
-            params,
-            1,
-            skinToken,
-            sizeof(skinToken)
-        )
-    )
+    if(!CRP_AdminGetToken(
+        params,
+        0,
+        targetToken,
+        sizeof(targetToken)
+    ) ||
+    !CRP_AdminGetToken(
+        params,
+        1,
+        skinToken,
+        sizeof(skinToken)
+    ))
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "USAGE: /setskin [ID] [skin]"
+            "USAGE: /setskin [ID] [skinid]"
         );
 
         return 1;
     }
 
-    new targetid =
-        CRP_AdminFindPlayer(targetToken);
+    new targetid = CRP_AdminFindPlayer(
+        targetToken
+    );
 
     if(!CRP_AdminRequireTarget(
         playerid,
@@ -1789,24 +1686,20 @@ stock CRP_AdminCommand_SetSkin(
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Skin harus berupa angka."
+            "AdminCmd: Skin ID harus berupa angka."
         );
 
         return 1;
     }
 
-    new skinid =
-        strval(skinToken);
+    new skinid = strval(skinToken);
 
-    if(
-        skinid < 0 ||
-        skinid > 311
-    )
+    if(skinid < 0 || skinid > 311)
     {
         SendClientMessage(
             playerid,
             COLOR_RED,
-            "AdminCmd: Skin ID harus 0-311."
+            "AdminCmd: Skin ID harus berada pada range 0-311."
         );
 
         return 1;
@@ -1826,7 +1719,7 @@ stock CRP_AdminCommand_SetSkin(
     SendClientMessage(
         targetid,
         COLOR_YELLOW,
-        "AdminCmd: Skin karakter kamu telah diubah oleh Admin."
+        "AdminCmd: Skin kamu telah diubah oleh admin."
     );
 
     return 1;
@@ -1835,13 +1728,13 @@ stock CRP_AdminCommand_SetSkin(
 
 // ============================================================
 // /CHARREMOVE
-// R9-R10
-// ============================================================
 //
-// Foundation note:
-// Character deletion/removal membutuhkan Character Storage API.
-// Command sudah dikunci pada R9-R10.
-// Backend removal sengaja belum dilakukan di sini.
+// Permission:
+// R9-R10
+//
+// Character storage belum menjadi dependency command layer.
+// Karena itu command ini tidak melakukan destructive action
+// sebelum Character Storage API tersedia.
 // ============================================================
 
 stock CRP_AdminCommand_CharRemove(
@@ -1849,8 +1742,15 @@ stock CRP_AdminCommand_CharRemove(
     const params[]
 )
 {
-    new rank =
-        CRP_AdminGetRank(playerid);
+    if(!CRP_AdminRequireStaff(
+        playerid,
+        ADMIN_SERVER_DIRECTOR
+    ))
+    {
+        return 1;
+    }
+
+    new rank = CRP_AdminGetRank(playerid);
 
     if(
         rank < ADMIN_SERVER_DIRECTOR ||
@@ -1866,23 +1766,19 @@ stock CRP_AdminCommand_CharRemove(
         return 1;
     }
 
-    if(!CRP_AdminIsStaff(playerid))
-    {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Kamu bukan bagian dari staff."
-        );
+    new token[64];
 
-        return 1;
-    }
-
-    if(!strlen(params))
+    if(!CRP_AdminGetToken(
+        params,
+        0,
+        token,
+        sizeof(token)
+    ))
     {
         SendClientMessage(
             playerid,
             COLOR_YELLOW,
-            "USAGE: /charremove [ID]"
+            "USAGE: /charremove [character]"
         );
 
         return 1;
@@ -1890,14 +1786,14 @@ stock CRP_AdminCommand_CharRemove(
 
     SendClientMessage(
         playerid,
-        COLOR_GREY,
-        "AdminCmd: Character removal backend belum terhubung."
+        COLOR_YELLOW,
+        "AdminCmd: Character Storage backend belum terhubung."
     );
 
     SendClientMessage(
         playerid,
         COLOR_GREY,
-        "Command ini sengaja belum menghapus data karakter."
+        "AdminCmd: Tidak ada data character yang dihapus. Command foundation sudah aktif untuk R9-R10."
     );
 
     return 1;
@@ -1906,119 +1802,93 @@ stock CRP_AdminCommand_CharRemove(
 
 // ============================================================
 // /AHELP
+//
+// Permission:
+// R1+
 // ============================================================
 
-stock CRP_AdminCommand_AHelp(
-    playerid
-)
+stock CRP_AdminCommand_AHelp(playerid)
 {
-    new rank =
-        CRP_AdminGetRank(playerid);
-
-    if(rank < ADMIN_INTERN)
+    if(!CRP_AdminRequireStaff(
+        playerid,
+        ADMIN_INTERN
+    ))
     {
-        SendClientMessage(
-            playerid,
-            COLOR_RED,
-            "AdminCmd: Kamu tidak memiliki akses."
-        );
-
         return 1;
     }
+
+    new rank = CRP_AdminGetRank(playerid);
 
     SendClientMessage(
         playerid,
         COLOR_GOLD,
-        "========== CRYSTAL ROLEPLAY ADMIN =========="
+        "========== CRYSTAL ROLEPLAY ADMIN HELP =========="
     );
-
-    // --------------------------------------------------------
-    // R1+
-    // --------------------------------------------------------
 
     SendClientMessage(
         playerid,
         COLOR_WHITE,
-        "R1+: /ap /asks /a /ahelp /admins"
+        "Core: /ap /asks /a /admins /ahelp"
     );
-
-    // --------------------------------------------------------
-    // R2+
-    // --------------------------------------------------------
 
     if(rank >= ADMIN_HELPER)
     {
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "R2+: /aon /aoff /check /ainspect /goto /gethere"
+            "Inspection: /check /ainspect"
         );
 
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "R2+: /flip /afrisk /checkmask"
+            "Movement: /goto /gethere"
+        );
+
+        SendClientMessage(
+            playerid,
+            COLOR_WHITE,
+            "Control: /flip /afrisk /checkmask"
         );
     }
-
-    // --------------------------------------------------------
-    // R3+
-    // --------------------------------------------------------
 
     if(rank >= ADMIN_SENIOR_HELPER)
     {
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "R3+: /fixveh /respawncar /destroycar"
-        );
-
-        SendClientMessage(
-            playerid,
-            COLOR_WHITE,
-            "R3+: /respawnallcars /afill"
+            "Vehicle: /fixveh /respawncar /destroycar /respawnallcars /afill"
         );
     }
-
-    // --------------------------------------------------------
-    // R4+
-    // --------------------------------------------------------
 
     if(rank >= ADMIN_ADMIN)
     {
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "R4+: /setskin"
+            "Character: /setskin"
         );
     }
 
-    // --------------------------------------------------------
-    // R9-R10
-    // --------------------------------------------------------
-
-    if(
-        rank >= ADMIN_SERVER_DIRECTOR &&
-        rank <= ADMIN_DEVELOPER
-    )
+    if(rank >= ADMIN_SERVER_DIRECTOR)
     {
         SendClientMessage(
             playerid,
             COLOR_WHITE,
-            "R9-R10: /charremove"
+            "Restricted Character: /charremove"
         );
     }
 
     SendClientMessage(
         playerid,
         COLOR_GREY,
-        "Beberapa command menunggu Character/Storage backend."
+        "Catatan: Command backend yang belum tersedia tidak melakukan perubahan data."
     );
 
     SendClientMessage(
         playerid,
         COLOR_GOLD,
-        "==========================================="
+        "================================================="
     );
 
     return 1;
@@ -2027,6 +1897,8 @@ stock CRP_AdminCommand_AHelp(
 
 // ============================================================
 // COMMAND DISPATCHER
+//
+// Semua command admin dipusatkan di sini.
 // ============================================================
 
 public OnPlayerCommandText(
@@ -2034,115 +1906,47 @@ public OnPlayerCommandText(
     cmdtext[]
 )
 {
-    if(cmdtext[0] != '/')
-    {
+    if(!strlen(cmdtext))
         return 0;
-    }
 
-    new command[CRP_CMD_NAME_LENGTH];
-    new params[CRP_CMD_PARAMS_LENGTH];
+    if(cmdtext[0] != '/')
+        return 0;
+
+    new command[32];
+    new params[256];
 
     command[0] = EOS;
     params[0] = EOS;
 
-    new length =
-        strlen(cmdtext);
+    CRP_AdminGetToken(
+        cmdtext,
+        0,
+        command,
+        sizeof(command)
+    );
 
-    new start = 1;
-    new position = 0;
-
-    for(new i = 1; i <= length; i++)
-    {
-        if(
-            cmdtext[i] == ' ' ||
-            cmdtext[i] == EOS
-        )
-        {
-            new commandLength =
-                i - start;
-
-            if(commandLength <= 0)
-            {
-                return 0;
-            }
-
-            if(commandLength >= CRP_CMD_NAME_LENGTH)
-            {
-                commandLength =
-                    CRP_CMD_NAME_LENGTH - 1;
-            }
-
-            strmid(
-                command,
-                cmdtext,
-                start,
-                start + commandLength,
-                sizeof(command)
-            );
-
-            position = i + 1;
-
-            while(
-                cmdtext[position] == ' '
-            )
-            {
-                position++;
-            }
-
-            if(
-                cmdtext[position] != EOS
-            )
-            {
-                strmid(
-                    params,
-                    cmdtext,
-                    position,
-                    length,
-                    sizeof(params)
-                );
-            }
-
-            break;
-        }
-    }
-
-    if(!strlen(command))
-    {
-        return 0;
-    }
-
+    CRP_AdminGetRest(
+        cmdtext,
+        1,
+        params,
+        sizeof(params)
+    );
 
     // ========================================================
-    // R1+
+    // CORE
     // ========================================================
 
-    if(!strcmp(
-        command,
-        "ap",
-        true
-    ))
+    if(!strcmp(command, "/ap", true))
     {
-        return CRP_AdminCommand_AP(
-            playerid
-        );
+        return CRP_AdminCommand_AP(playerid);
     }
 
-    if(!strcmp(
-        command,
-        "asks",
-        true
-    ))
+    if(!strcmp(command, "/asks", true))
     {
-        return CRP_AdminCommand_Asks(
-            playerid
-        );
+        return CRP_AdminCommand_Asks(playerid);
     }
 
-    if(!strcmp(
-        command,
-        "a",
-        true
-    ))
+    if(!strcmp(command, "/a", true))
     {
         return CRP_AdminCommand_A(
             playerid,
@@ -2150,60 +1954,37 @@ public OnPlayerCommandText(
         );
     }
 
-    if(!strcmp(
-        command,
-        "ahelp",
-        true
-    ))
+    if(!strcmp(command, "/admins", true))
     {
-        return CRP_AdminCommand_AHelp(
-            playerid
-        );
+        return CRP_AdminCommand_Admins(playerid);
     }
 
-    if(!strcmp(
-        command,
-        "admins",
-        true
-    ))
+    if(!strcmp(command, "/ahelp", true))
     {
-        return CRP_AdminCommand_Admins(
-            playerid
-        );
+        return CRP_AdminCommand_AHelp(playerid);
     }
 
 
     // ========================================================
-    // R2+
+    // DUTY
     // ========================================================
 
-    if(!strcmp(
-        command,
-        "aon",
-        true
-    ))
+    if(!strcmp(command, "/aon", true))
     {
-        return CRP_AdminCommand_AOn(
-            playerid
-        );
+        return CRP_AdminCommand_AOn(playerid);
     }
 
-    if(!strcmp(
-        command,
-        "aoff",
-        true
-    ))
+    if(!strcmp(command, "/aoff", true))
     {
-        return CRP_AdminCommand_AOff(
-            playerid
-        );
+        return CRP_AdminCommand_AOff(playerid);
     }
 
-    if(!strcmp(
-        command,
-        "check",
-        true
-    ))
+
+    // ========================================================
+    // INSPECTION
+    // ========================================================
+
+    if(!strcmp(command, "/check", true))
     {
         return CRP_AdminCommand_Check(
             playerid,
@@ -2211,11 +1992,7 @@ public OnPlayerCommandText(
         );
     }
 
-    if(!strcmp(
-        command,
-        "ainspect",
-        true
-    ))
+    if(!strcmp(command, "/ainspect", true))
     {
         return CRP_AdminCommand_AInspect(
             playerid,
@@ -2223,11 +2000,12 @@ public OnPlayerCommandText(
         );
     }
 
-    if(!strcmp(
-        command,
-        "goto",
-        true
-    ))
+
+    // ========================================================
+    // MOVEMENT
+    // ========================================================
+
+    if(!strcmp(command, "/goto", true))
     {
         return CRP_AdminCommand_Goto(
             playerid,
@@ -2235,11 +2013,7 @@ public OnPlayerCommandText(
         );
     }
 
-    if(!strcmp(
-        command,
-        "gethere",
-        true
-    ))
+    if(!strcmp(command, "/gethere", true))
     {
         return CRP_AdminCommand_GetHere(
             playerid,
@@ -2247,34 +2021,28 @@ public OnPlayerCommandText(
         );
     }
 
-    if(!strcmp(
-        command,
-        "flip",
-        true
-    ))
+
+    // ========================================================
+    // CONTROL
+    // ========================================================
+
+    if(!strcmp(command, "/flip", true))
     {
         return CRP_AdminCommand_Flip(
-            playerid
-        );
-    }
-
-    if(!strcmp(
-        command,
-        "afrisk",
-        true
-    ))
-    {
-        return CRP_AdminCommand_AFrisk(
             playerid,
             params
         );
     }
 
-    if(!strcmp(
-        command,
-        "checkmask",
-        true
-    ))
+    if(!strcmp(command, "/afrisk", true))
+    {
+        return CRP_AdminCommand_AFriSK(
+            playerid,
+            params
+        );
+    }
+
+    if(!strcmp(command, "/checkmask", true))
     {
         return CRP_AdminCommand_CheckMask(
             playerid,
@@ -2284,76 +2052,43 @@ public OnPlayerCommandText(
 
 
     // ========================================================
-    // R3+
+    // VEHICLE
     // ========================================================
 
-    if(!strcmp(
-        command,
-        "fixveh",
-        true
-    ))
+    if(!strcmp(command, "/fixveh", true))
     {
         return CRP_AdminCommand_FixVeh(
-            playerid
+            playerid,
+            params
         );
     }
 
-    if(!strcmp(
-        command,
-        "respawncar",
-        true
-    ))
+    if(!strcmp(command, "/respawncar", true))
     {
         return CRP_AdminCommand_RespawnCar(
-            playerid
+            playerid,
+            params
         );
     }
 
-    if(!strcmp(
-        command,
-        "destroycar",
-        true
-    ))
+    if(!strcmp(command, "/destroycar", true))
     {
         return CRP_AdminCommand_DestroyCar(
-            playerid
+            playerid,
+            params
         );
     }
 
-    if(!strcmp(
-        command,
-        "respawnallcars",
-        true
-    ))
+    if(!strcmp(command, "/respawnallcars", true))
     {
         return CRP_AdminCommand_RespawnAllCars(
             playerid
         );
     }
 
-    if(!strcmp(
-        command,
-        "afill",
-        true
-    ))
+    if(!strcmp(command, "/afill", true))
     {
         return CRP_AdminCommand_AFill(
-            playerid
-        );
-    }
-
-
-    // ========================================================
-    // R4+
-    // ========================================================
-
-    if(!strcmp(
-        command,
-        "setskin",
-        true
-    ))
-    {
-        return CRP_AdminCommand_SetSkin(
             playerid,
             params
         );
@@ -2361,14 +2096,18 @@ public OnPlayerCommandText(
 
 
     // ========================================================
-    // R9-R10
+    // CHARACTER
     // ========================================================
 
-    if(!strcmp(
-        command,
-        "charremove",
-        true
-    ))
+    if(!strcmp(command, "/setskin", true))
+    {
+        return CRP_AdminCommand_SetSkin(
+            playerid,
+            params
+        );
+    }
+
+    if(!strcmp(command, "/charremove", true))
     {
         return CRP_AdminCommand_CharRemove(
             playerid,
@@ -2378,7 +2117,7 @@ public OnPlayerCommandText(
 
 
     // ========================================================
-    // UNKNOWN COMMAND
+    // NOT AN ADMIN COMMAND
     // ========================================================
 
     return 0;
@@ -2391,17 +2130,14 @@ public OnPlayerCommandText(
 
 public OnFilterScriptInit()
 {
-    print("--------------------------------------------------");
-    print("Crystal Roleplay Admin Commands v1.3");
+    print("============================================================");
+    print("Crystal Roleplay - Admin Commands System v1.4");
     print("Command layer initialized.");
-    print("R1: /ap /asks /a /ahelp /admins");
-    print("R2: /aon /aoff /check /ainspect /goto /gethere");
-    print("R2: /flip /afrisk /checkmask");
-    print("R3: /fixveh /respawncar /destroycar");
-    print("R3: /respawnallcars /afill");
-    print("R4: /setskin");
-    print("R9-R10: /charremove");
-    print("--------------------------------------------------");
+    print("Account-based admin identity enabled.");
+    print("Duty bridge: crp_admin.pwn");
+    print("ASK Queue bridge: CRP_AskOpenAdminQueue");
+    print("Permission foundation synchronized.");
+    print("============================================================");
 
     return 1;
 }
@@ -2413,12 +2149,7 @@ public OnFilterScriptInit()
 
 public OnFilterScriptExit()
 {
-    print("Crystal Roleplay Admin Commands unloaded.");
+    print("Crystal Roleplay - Admin Commands System unloaded.");
 
     return 1;
 }
-
-
-// ============================================================
-// END OF FILE
-// ============================================================
